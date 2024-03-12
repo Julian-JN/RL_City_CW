@@ -1,3 +1,4 @@
+#%%
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -53,37 +54,45 @@ class Maze_env:
         plt.show()
         plt.close()
 
-    def create_r_matrix(self):
+    def create_r_matrix(self, reward_type="free_movement"):
+        """
+        reward_type (str): The type of reward to use. Options are:
+        - "free_movement": ###-1 for each step, 100 for reaching the target, 200 for reaching the coin
+        - "sparse": ###-1 for each step, 100 for reaching the target, 200 for reaching the coin
+        """
         actions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-        num_states = self.maze.shape[0] * self.maze.shape[1]
-        R = np.full((num_states, 4), np.nan)
+        num_states = self.maze.shape[0] * self.maze.shape[1] * 2  # times coin state
+        coin_states = 2  # 0 for no coin collected, 1 for coin collected
+        R = np.full(
+            (self.maze.shape[0], self.maze.shape[1], coin_states, len(actions)), np.nan
+        )
 
-        state_index = 0
-        for i in range(self.maze.shape[0]):
-            for j in range(self.maze.shape[1]):
-                # If the cell is not a wall
-                if self.maze[i, j] == 0:
-                    for index, action in enumerate(actions):
-                        new_position = (i + action[0], j + action[1])
-                        # If action leads to a valid state
-                        if (
-                            0 <= new_position[0] < self.maze.shape[0]
-                            and 0 <= new_position[1] < self.maze.shape[1]
-                            and self.maze[new_position] == 0
-                        ):
-                            # Calculate the state number for the new position
-                            # Set reward to 0
-                            R[state_index, index] = -5
+        if reward_type == "free_movement":
+            # actions beyond limits get None
+            # actions to a 0 (get -10
+            # action to coin get 200
+            # action to target get 100
+            # allowed actions get -1
 
-                            # If action leads to goal state set reward to 100
-                            if new_position == self.target:
-                                R[state_index, index] = 1000
-                            if new_position == self.coins:
-                                R[state_index, index] = 200
-                state_index += 1
+            for i in range(self.maze.shape[0]):
+                for j in range(self.maze.shape[1]):
+                    for coin_state in range(coin_states):
+                        for action_index, action in enumerate(actions):
+                            new_i, new_j = i + action[0], j + action[1]
 
+                            if new_i >= 0 and new_i < self.maze.shape[0] and new_j >= 0 and new_j < self.maze.shape[1]:
+                                # Actions to a wall (1 in the maze) get None
+                                if self.maze[new_i, new_j] == 1:
+                                    R[i, j, coin_state, action_index] = -10 # for the fire
+                                elif self.maze[new_i, new_j] == 0:
+                                    R[i, j, coin_state, action_index] = -1  # for an allowed action
+                                    if (i, j) == self.coins and not coin_state:
+                                        R[i, j, coin_state, action_index] = 100  # coin
+                                    elif (i, j) == self.target:
+                                        R[i, j, coin_state, action_index] = 200 # target
+                            else:
+                                R[i, j, coin_state, action_index] =  None  # actions beyond the limits are forbidden
         self.R = R
-        print(self.R.shape)
         return self.R
 
     def reward(self, state, action):
@@ -109,9 +118,7 @@ class Maze_env:
             print("Reached Target!")
             print((x, y))
 
-            return 0 + int(
-                self.coin_collected == True
-            )  # reached the target and bonus if collected coin
+            return 0 + int(self.coin_collected == True)  # reached the target and bonus if collected coin
         elif (x, y) == self.coins and not self.coin_collected:
             print("DING DING DING")
             return 10
@@ -165,3 +172,22 @@ class Maze_env:
         print(self.Q.shape)
         self.states = coord_to_index
         return self.Q, coord_to_index
+
+#%%
+maze = np.array(
+    [
+        [1, 0, 1, 1, 1, 1, 1, 0, 0, 1],
+        [0, 1, 1, 1, 1, 0, 1, 0, 1, 1],
+        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+        [0, 1, 1, 0, 0, 0, 0, 0, 1, 0],
+        [1, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+        [0, 0, 0, 0, 1, 1, 0, 1, 0, 0],
+        [1, 1, 1, 0, 0, 1, 0, 0, 0, 1],
+        [0, 1, 0, 0, 0, 0, 0, 0, 1, 1],
+        [1, 1, 1, 1, 0, 1, 0, 1, 1, 0],
+        [0, 1, 0, 0, 1, 1, 1, 0, 0, 1],
+    ]
+)
+env = Maze_env((2, 0), (0, 8), (7, 5), maze)
+
+# %%
