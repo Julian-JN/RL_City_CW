@@ -6,7 +6,7 @@ from matplotlib import pyplot as plt
 class Maze_env:
     """
     Represents a maze navigation environment for reinforcement learning tasks.
-    It manages the maze layout, start, target, and coin positions.
+    It manages the maze layout, positions of start, target, and coin, and rewards/transitions. 
     Functionality includes:
     - `__init__(start, target, coins, maze)`: Initializes the environment.
     - `plot_env()`: Visualizes the maze with important positions highlighted.
@@ -24,8 +24,8 @@ class Maze_env:
         self.start = start
         self.coins = coins
         self.position = 0
-        self.R = 0
-        self.Q = 0
+        self.R = self.create_r_matrix()
+        _, self.Q = self.create_q_matrix
         self.states = []
         self.coin_collected = False
         self.terminate = False
@@ -56,9 +56,9 @@ class Maze_env:
 
     def create_r_matrix(self, reward_type="free_movement"):
         """
-        reward_type (str): The type of reward to use. Options are:
-        - "free_movement": ###-1 for each step, 100 for reaching the target, 200 for reaching the coin
-        - "sparse": ###-1 for each step, 100 for reaching the target, 200 for reaching the coin
+        This synthesizes the reward and transition functions.
+        reward_type (str): The type of reward to use.
+        Options are "terminal_movement" and "free_movement".
         """
         actions = [(-1, 0), (1, 0), (0, -1), (0, 1)]
         num_states = self.maze.shape[0] * self.maze.shape[1] * 2  # times coin state
@@ -66,13 +66,42 @@ class Maze_env:
         R = np.full(
             (self.maze.shape[0], self.maze.shape[1], coin_states, len(actions)), np.nan
         )
-
-        if reward_type == "free_movement":
-            # actions beyond limits get None
-            # actions to a 0 (get -10
+    
+        if reward_type == "terminal_movement":
+            # actions beyond limits get -10 (and terminate)
+            # actions to a 0 -10 (and terminate)
             # action to coin get 200
             # action to target get 100
-            # allowed actions get -1
+            # allowed actions get -1 (for the time)
+
+            for i in range(self.maze.shape[0]):
+                for j in range(self.maze.shape[1]):
+                    for coin_state in range(coin_states):
+                        for action_index, action in enumerate(actions):
+                            new_i, new_j = i + action[0], j + action[1]
+
+                            if new_i >= 0 and new_i < self.maze.shape[0] and new_j >= 0 and new_j < self.maze.shape[1]:
+                                # Actions to a wall (1 in the maze) get None
+                                if self.maze[new_i, new_j] == 1:
+                                    R[i, j, coin_state, action_index] = -10 # for the fire
+                                elif self.maze[new_i, new_j] == 0:
+                                    R[i, j, coin_state, action_index] = -1  # for an allowed action
+                                    if (i, j) == self.coins and not coin_state:
+                                        R[i, j, coin_state, action_index] = 100  # coin
+                                    elif (i, j) == self.target:
+                                        R[i, j, coin_state, action_index] = 200 # target
+                            else:
+                                R[i, j, coin_state, action_index] =  -10  # actions beyond the limits are forbidden
+
+            return R
+            # then add the tranistion function so that if reward smaller than -1, then terminate.
+    
+        if reward_type == "free_movement":
+            # actions beyond limits get None (can't move)
+            # actions to a 0 (get -10)
+            # action to coin get 200
+            # action to target get 100
+            # allowed actions get -1 (for the time)
 
             for i in range(self.maze.shape[0]):
                 for j in range(self.maze.shape[1]):
@@ -92,9 +121,71 @@ class Maze_env:
                                         R[i, j, coin_state, action_index] = 200 # target
                             else:
                                 R[i, j, coin_state, action_index] =  None  # actions beyond the limits are forbidden
-        self.R = R
-        return self.R
+            return R
 
+    def transition_R(self, state, action, reward_type="free_movement"):
+        state_new = self.states[state]
+        x, y = state_new
+        if action == 0:  # up
+            x -= 1
+        elif action == 1:  # down
+            x += 1
+        elif action == 2:  # left
+            y -= 1
+        elif action == 3:  # right
+            y += 1
+
+        if reward_type == "terminal_movement":
+            if x >= 0 and x < self.maze.shape[0] and y >= 0 and y < self.maze.shape[1]:
+                if self.R[x, y, self.coin_collected, action] == -10: # fire
+                    return self.states[state]                  
+                elif self.R[x, y, self.coin_collected, action] == 100: # coin
+                    self.coin_collected = True
+                    return self.states.index((x, y)) 
+                elif self.R[x, y, self.coin_collected, action] == 200: # target
+                    self.terminate = True
+                elif self.R[x, y, self.coin_collected, action] == -1: # normal action
+                    return self.states.index((x, y))
+            else:
+                self.terminate = True  # walls
+
+        if reward_type == "free_movement":
+            if x >= 0 and x < self.maze.shape[0] and y >= 0 and y < self.maze.shape[1]:
+                if self.R[x, y, self.coin_collected, action] == 1: # fire
+                    return self.states.index((x, y))
+                elif self.R[x, y, self.coin_collected, action] == 100: # coin
+                    self.coin_collected = True
+                    return self.states.index((x, y)) 
+                elif self.R[x, y, self.coin_collected, action] == 200: # target
+                    self.terminate = True
+                elif self.R[x, y, self.coin_collected, action] == -1: # normal action
+                    return self.states.index((x, y))
+
+            else:
+                self.terminate = self.states[state]  # walls
+                # TODO: it would be nice that before choosing the action (policy),
+                # we checked whether it will lead to a new state or not.
+                # if it doesn't, then we should choose another action.
+                # Because it will count as a timestep, not moving.
+                # But careful: for "terminal_movement" fire leads to no movement
+            
+        if (
+            x < 0
+            or x >= len(self.maze)
+            or y < 0
+            or y >= len(self.maze[0])
+            or self.maze[x][y] == 1
+        ):
+            #             self.terminate = True
+            return self.states.index(state_new)  # hit a wall, stay in the same state
+        else:
+            if (x, y) == self.coins and not self.coin_collected:
+                self.coin_collected = True
+                return 100  # specific index for coin
+            else:
+                if (x, y) == self.target:
+                    self.terminate = True
+                return self.states.index((x, y))  # move to the new state
     def reward(self, state, action):
         state = self.states[state]
         x, y = state
