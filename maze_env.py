@@ -25,8 +25,9 @@ class Maze_env:
         self.coins = coins
         self.position = 0
         self.R = self.create_r_matrix()
-        _, self.Q = self.create_q_matrix
-        self.states = []
+        print(self.R.shape)
+        self.Q = self.create_q_matrix()
+        print(self.Q.shape)
         self.coin_collected = False
         self.terminate = False
 
@@ -54,7 +55,7 @@ class Maze_env:
         plt.show()
         plt.close()
 
-    def create_r_matrix(self, reward_type="free_movement"):
+    def create_r_matrix(self, reward_type="terminal_movement"):
         """
         This synthesizes the reward and transition functions.
         reward_type (str): The type of reward to use.
@@ -64,8 +65,7 @@ class Maze_env:
         num_states = self.maze.shape[0] * self.maze.shape[1] * 2  # times coin state
         coin_states = 2  # 0 for no coin collected, 1 for coin collected
         R = np.full(
-            (self.maze.shape[0], self.maze.shape[1], coin_states, len(actions)), np.nan
-        )
+            (self.maze.shape[0], self.maze.shape[1], coin_states, len(actions)), np.nan)
     
         if reward_type == "terminal_movement":
             # actions beyond limits get -10 (and terminate)
@@ -79,24 +79,25 @@ class Maze_env:
                     for coin_state in range(coin_states):
                         for action_index, action in enumerate(actions):
                             new_i, new_j = i + action[0], j + action[1]
-
                             if new_i >= 0 and new_i < self.maze.shape[0] and new_j >= 0 and new_j < self.maze.shape[1]:
                                 # Actions to a wall (1 in the maze) get None
                                 if self.maze[new_i, new_j] == 1:
-                                    R[i, j, coin_state, action_index] = -10 # for the fire
-                                elif self.maze[new_i, new_j] == 0:
-                                    R[i, j, coin_state, action_index] = -1  # for an allowed action
-                                    if (i, j) == self.coins and not coin_state:
-                                        R[i, j, coin_state, action_index] = 100  # coin
-                                    elif (i, j) == self.target:
-                                        R[i, j, coin_state, action_index] = 200 # target
+                                    R[i, j, coin_state, action_index] = -1 # for the fire
+                                elif self.maze[new_i, new_j] == 0 and (new_i, new_j) != self.target:
+                                    R[i, j, coin_state, action_index] = -0.005  # for an allowed action
+                                    if (new_i, new_j) == self.coins and not coin_state:
+                                        print("Assigning coin")
+                                        R[i, j, coin_state, action_index] = 10  # coin
+                                if (new_i, new_j) == self.target:
+                                    print("Assigning target")
+                                    R[i, j, coin_state, action_index] = 1  # target
                             else:
-                                R[i, j, coin_state, action_index] =  -10  # actions beyond the limits are forbidden
+                                R[i, j, coin_state, action_index] = -1  # actions beyond the limits are forbidden
 
             return R
-            # then add the tranistion function so that if reward smaller than -1, then terminate.
+            # then add the transition function so that if reward smaller than -1, then terminate.
     
-        if reward_type == "free_movement":
+        if reward_type == "limited_movement":
             # actions beyond limits get None (can't move)
             # actions to a 0 (get -10)
             # action to coin get 200
@@ -112,173 +113,92 @@ class Maze_env:
                             if new_i >= 0 and new_i < self.maze.shape[0] and new_j >= 0 and new_j < self.maze.shape[1]:
                                 # Actions to a wall (1 in the maze) get None
                                 if self.maze[new_i, new_j] == 1:
-                                    R[i, j, coin_state, action_index] = -10 # for the fire
+                                    R[i, j, coin_state, action_index] = -1 # for the fire
                                 elif self.maze[new_i, new_j] == 0:
-                                    R[i, j, coin_state, action_index] = -1  # for an allowed action
+                                    R[i, j, coin_state, action_index] = -0.005  # for an allowed action
                                     if (i, j) == self.coins and not coin_state:
-                                        R[i, j, coin_state, action_index] = 100  # coin
+                                        R[i, j, coin_state, action_index] = 10  # coin
                                     elif (i, j) == self.target:
-                                        R[i, j, coin_state, action_index] = 200 # target
+                                        R[i, j, coin_state, action_index] = 1  # target
                             else:
-                                R[i, j, coin_state, action_index] =  None  # actions beyond the limits are forbidden
+                                R[i, j, coin_state, action_index] = None  # actions beyond the limits are forbidden
             return R
 
-    def transition_R(self, state, action, reward_type="free_movement"):
-        state_new = self.states[state]
-        x, y = state_new
+    def transition_R(self, state, action, reward_type="terminal_movement"):
+        initial_state = state
+        x, y = initial_state
+        new_x = x
+        new_y = y
         if action == 0:  # up
-            x -= 1
+            new_x -= 1
         elif action == 1:  # down
-            x += 1
+            new_x += 1
         elif action == 2:  # left
-            y -= 1
+            new_y -= 1
         elif action == 3:  # right
-            y += 1
+            new_y += 1
 
         if reward_type == "terminal_movement":
-            if x >= 0 and x < self.maze.shape[0] and y >= 0 and y < self.maze.shape[1]:
-                if self.R[x, y, self.coin_collected, action] == -10: # fire
-                    return self.states[state]                  
-                elif self.R[x, y, self.coin_collected, action] == 100: # coin
-                    self.coin_collected = True
-                    return self.states.index((x, y)) 
-                elif self.R[x, y, self.coin_collected, action] == 200: # target
+            # print("Calculating new state")
+            if new_x >= 0 and new_x < self.maze.shape[0] and new_y >= 0 and new_y < self.maze.shape[1]:
+                if self.R[x, y, int(self.coin_collected), action] == -1: # fire
+                    # print("Fire")
                     self.terminate = True
-                elif self.R[x, y, self.coin_collected, action] == -1: # normal action
-                    return self.states.index((x, y))
+                    return state
+                elif self.R[x, y, int(self.coin_collected), action] == 10: # coin
+                    print("Coin")
+                    self.coin_collected = True
+                    # print(self.coin_collected)
+                    return new_x,new_y
+                elif (new_x,new_y) == self.target: # target
+                    print("Target")
+                    self.terminate = True
+                    return new_x,new_y
+                elif self.R[x, y, int(self.coin_collected), action] == -0.005: # normal action
+                    # print("Allowed")
+                    return new_x,new_y
             else:
                 self.terminate = True  # walls
+                # print("Out of bounds")
+                return state
 
-        if reward_type == "free_movement":
-            if x >= 0 and x < self.maze.shape[0] and y >= 0 and y < self.maze.shape[1]:
-                if self.R[x, y, self.coin_collected, action] == 1: # fire
-                    return self.states.index((x, y))
-                elif self.R[x, y, self.coin_collected, action] == 100: # coin
+        if reward_type == "limited_movement": # should not attempt to access fire or wall
+            if new_x >= 0 and new_x < self.maze.shape[0] and new_y >= 0 and new_y < self.maze.shape[1]:
+                if self.R[x, y, int(self.coin_collected), action] == 10: # coin
                     self.coin_collected = True
-                    return self.states.index((x, y)) 
-                elif self.R[x, y, self.coin_collected, action] == 200: # target
+                    return new_x,new_y
+                elif (new_x,new_y) == self.target: # target
                     self.terminate = True
-                elif self.R[x, y, self.coin_collected, action] == -1: # normal action
-                    return self.states.index((x, y))
-
-            else:
-                self.terminate = self.states[state]  # walls
-                # TODO: it would be nice that before choosing the action (policy),
-                # we checked whether it will lead to a new state or not.
-                # if it doesn't, then we should choose another action.
-                # Because it will count as a timestep, not moving.
-                # But careful: for "terminal_movement" fire leads to no movement
-            
-        if (
-            x < 0
-            or x >= len(self.maze)
-            or y < 0
-            or y >= len(self.maze[0])
-            or self.maze[x][y] == 1
-        ):
-            #             self.terminate = True
-            return self.states.index(state_new)  # hit a wall, stay in the same state
-        else:
-            if (x, y) == self.coins and not self.coin_collected:
-                self.coin_collected = True
-                return 100  # specific index for coin
-            else:
-                if (x, y) == self.target:
-                    self.terminate = True
-                return self.states.index((x, y))  # move to the new state
-    def reward(self, state, action):
-        state = self.states[state]
-        x, y = state
-        if action == 0:  # up
-            x -= 1
-        elif action == 1:  # down
-            x += 1
-        elif action == 2:  # left
-            y -= 1
-        elif action == 3:  # right
-            y += 1
-        if (
-            x < 0
-            or x >= len(self.maze)
-            or y < 0
-            or y >= len(self.maze[0])
-            or self.maze[x][y] == 1
-        ):
-            return -0.0  # hit a wall (including edges wall?)
-        elif (x, y) == self.target:
-            print("Reached Target!")
-            print((x, y))
-
-            return 0 + int(self.coin_collected == True)  # reached the target and bonus if collected coin
-        elif (x, y) == self.coins and not self.coin_collected:
-            print("DING DING DING")
-            return 10
-        else:
-            return -0.001  # regular step
-
-    def transition(self, state, action):
-        state_new = self.states[state]
-        x, y = state_new
-        if action == 0:  # up
-            x -= 1
-        elif action == 1:  # down
-            x += 1
-        elif action == 2:  # left
-            y -= 1
-        elif action == 3:  # right
-            y += 1
-
-        if (
-            x < 0
-            or x >= len(self.maze)
-            or y < 0
-            or y >= len(self.maze[0])
-            or self.maze[x][y] == 1
-        ):
-            #             self.terminate = True
-            return self.states.index(state_new)  # hit a wall, stay in the same state
-        else:
-            if (x, y) == self.coins and not self.coin_collected:
-                self.coin_collected = True
-                return 100  # specific index for coin
-            else:
-                if (x, y) == self.target:
-                    self.terminate = True
-                return self.states.index((x, y))  # move to the new state
+                    return new_x,new_y
+                elif self.R[x, y, int(self.coin_collected), action] == -0.005: # normal action
+                    return new_x,new_y
 
     def done(self):
         return self.terminate
 
+    def coin_reached(self):
+        return self.coin_collected
+
     def create_q_matrix(self):
-        coord_to_index = []
-        for i in range(self.maze.shape[0]):
-            for j in range(self.maze.shape[1]):
-                coord_to_index.append((i, j))
-        coord_to_index.append(self.coins)
-        print(coord_to_index)
+        Q = np.zeros_like(self.R)
+        return Q
 
-        num_states = self.maze.shape[0] * self.maze.shape[1] + 1
-        num_actions = 4
-        self.Q = np.zeros((num_states, num_actions))
-        print(self.Q.shape)
-        self.states = coord_to_index
-        return self.Q, coord_to_index
+if "main":
+    maze = np.array(
+        [
+            [1, 0, 1, 1, 1, 1, 1, 0, 0, 1],
+            [0, 1, 1, 1, 1, 0, 1, 0, 1, 1],
+            [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+            [0, 1, 1, 0, 0, 0, 0, 0, 1, 0],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 1, 1, 0, 1, 0, 0],
+            [1, 1, 1, 0, 0, 1, 0, 0, 0, 1],
+            [0, 1, 0, 0, 0, 0, 0, 0, 1, 1],
+            [1, 1, 1, 1, 0, 1, 0, 1, 1, 0],
+            [0, 1, 0, 0, 1, 1, 1, 0, 0, 1],
+        ]
+    )
+    env = Maze_env((2, 0), (0, 8), (7, 5), maze)
+    env.plot_env()
 
-#%%
-maze = np.array(
-    [
-        [1, 0, 1, 1, 1, 1, 1, 0, 0, 1],
-        [0, 1, 1, 1, 1, 0, 1, 0, 1, 1],
-        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 1, 1, 0, 0, 0, 0, 0, 1, 0],
-        [1, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-        [0, 0, 0, 0, 1, 1, 0, 1, 0, 0],
-        [1, 1, 1, 0, 0, 1, 0, 0, 0, 1],
-        [0, 1, 0, 0, 0, 0, 0, 0, 1, 1],
-        [1, 1, 1, 1, 0, 1, 0, 1, 1, 0],
-        [0, 1, 0, 0, 1, 1, 1, 0, 0, 1],
-    ]
-)
-env = Maze_env((2, 0), (0, 8), (7, 5), maze)
 
-# %%

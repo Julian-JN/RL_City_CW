@@ -22,20 +22,21 @@ class Q_learning:
     The class utilizes epsilon-greedy and softmax policies for action selection, balancing the exploration of the state space with the exploitation of known rewards.
     """
 
-    def __init__(self, alpha, gamma, epsilon, episodes, steps, env, states):
+    def __init__(self, alpha, gamma, epsilon, episodes, steps, env):
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
         self.temperature = 100.0
-        self.states = states
 
         #         self.R = env.R
         #         self.R_mod = self.R.copy()
+        self.R = env.R
+        self.R_mod = self.R
         self.Q = env.Q
         self.episodes = episodes
         self.steps = steps
         self.start = env.start
-        self.target = self.states.index(env.target)
+        self.target = env.target
         self.coins = env.coins
         self.env = env
         self.episodes_rewards = []
@@ -45,30 +46,38 @@ class Q_learning:
         self.window_size = 4
         self.current_average = 0
 
-        print("Initial Q matrix is '{}'".format(self.Q))
+        print("Initial Q matrix shape is '{}'".format(self.Q.shape))
+        print("Initial Q matrix values are '{}'".format(self.Q))
+
 
     def plot_rewards(self):
         plt.plot(self.episodes_rewards)
         plt.show()
 
     def show_Q_spec(self, coord):
-        print(q_learning.Q[self.states.index(coord)])
+        i, j = coord
+        print(self.Q[i, j, int(self.env.coin_reached()), :])
 
     def greedy_policy(self, state):
-        #                 available_actions = np.where(~np.isnan(self.R_mod[s]))[0]
-        #                 q_values = [self.Q[s,a] for a in available_actions]
-        #                 best_actions = available_actions[np.where(q_values == np.max(q_values))[0]]
-
-        available_actions = np.array([0, 1, 2, 3])
-        q_values = [self.Q[state, a] for a in available_actions]
+        i,j = state
+        available_actions = np.where(~np.isnan(self.R_mod[i,j,int(self.env.coin_reached())]))[0]
+        # print("Action choice")
+        # print(available_actions)
+        q_values = [self.Q[i,j,int(self.env.coin_reached()),a] for a in available_actions]
         best_actions = available_actions[np.where(q_values == np.max(q_values))[0]]
+        # print(best_actions)
+
+        # available_actions = np.array([0, 1, 2, 3])
+        # q_values = [self.Q[state, a] for a in available_actions]
+        # best_actions = available_actions[np.where(q_values == np.max(q_values))[0]]
 
         if np.random.uniform() < self.epsilon:
-            a = np.random.choice(4)
-        #                     a = np.random.choice(available_actions)
+            # a = np.random.choice(4)
+            a = np.random.choice(available_actions)
         else:
             #                     a = np.argmax(self.Q[s,:])
             a = np.random.choice(best_actions)
+        # print(a)
         return a
 
     def softmax_policy(self, state, temperature=1.0):
@@ -83,59 +92,67 @@ class Q_learning:
         return selected_action
 
     def train(self):
-        print(self.states)
-        print("Starting taget is '{}'".format(self.target))
+        print("Target is '{}'".format(self.target))
+        print("Starting state is '{}'".format(self.start))
+
         for episode in range(self.episodes):
-            s = self.states.index(self.start)
-            print("Starting state is '{}'".format(s))
+            # print("New episode")
+            s = self.start
             episode_reward = 0
-            env.coin_collected = False
-            env.terminate = False
-            #             self.R_mod = self.R
+            self.env.coin_collected = False
+            self.env.terminate = False
+            self.R_mod = self.R
+            # print("New episode")
             for timestep in range(self.steps):
-
+                print(self.env.coin_reached())
+                i,j = s
+                # print(s)
                 # Epsilon-greedy action choice
-                #                 a = self.greedy_policy(s)
-                a = self.softmax_policy(s, self.temperature)
-
+                a = self.greedy_policy(s)
+                # print(a)
+                #                 a = self.softmax_policy(s, self.temperature)
                 # Environment updating
-                r = env.reward(s, a)
-                #                 r = self.R_mod[s,a]
+                # r = env.reward(s, a)
+                # print(self.R_mod[i,j,int(self.env.coin_collected)])
+                r = self.R_mod[i,j,int(self.env.coin_reached()),a]
+                # print(r)
+                # if self.env.coin_reached():
+                #     print()
+                #     print("Coin collected")
+                    # print(self.env.coin_reached())
+                # print("Reward")
                 episode_reward += r
-                new_s = env.transition(s, a)
-                # Doubts coordinates to Q system?
-                # Q value updating
-                #                 print(new_s)
-                self.Q[s, a] = self.Q[s, a] + self.alpha * (
-                    r + self.gamma * np.max(self.Q[new_s, :]) - self.Q[s, a]
-                )
+                new_state = self.env.transition_R((i,j),a, reward_type="terminal_movement")
+                if self.env.coin_reached():
+                    if new_state == (0,8):
+                        print("REEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
+                        print(r)
+                    print(new_state)
+                # print(new_state)
+                new_i, new_j = new_state
+                self.Q[i,j, int(self.env.coin_reached()),a] = self.Q[i,j,int(self.env.coin_reached()) ,a] + self.alpha * (r + self.gamma * np.max(self.Q[new_i,new_j,int(self.env.coin_reached()), :]) - self.Q[i,j,int(self.env.coin_reached()) ,a])
 
-                if env.done():
+                if self.env.done():
+                    # print("Death")
+                    # print(self.env.terminate)
                     break
-                s = new_s
+                s = new_state
 
             self.episodes_rewards.append(episode_reward)
 
             self.list_rewards.append(episode_reward)
             if len(self.list_rewards) > self.max_list_size:
                 self.list_rewards.pop(0)
-            window = self.list_rewards[-self.window_size :]
+            window = self.list_rewards[-self.window_size:]
             window_average = sum(window) / self.window_size
-            #             if abs(self.current_average - window_average) < self.threshold:
-            #                 print(f"Average exceeded threshold at episode {episode}. STOPPING!")
-            #                 break
             self.current_average = window_average
 
-            if episode % 2 == 0:
-                print(
-                    "Episode {} finished. Episode Reward {}. Timesteps {}. Average {}".format(
-                        episode, episode_reward, timestep, window_average
-                    )
-                )
-            self.epsilon = max(self.epsilon * 0.999, 0.01)
-            self.temperature = max(self.temperature * 0.998, 0.01)
-
-            print(self.temperature)
+            if episode % 5 == 0:
+                print('Episode {} finished. Episode Reward {}. Timesteps {}. Average {}'.format(episode,
+                                                                                                episode_reward,
+                                                                                                timestep,
+                                                                                                window_average))
+            self.epsilon = np.interp(episode, [0, self.episodes], [1, 0.05])
 
     def create_video(self):
         image_folder = "img"  # Directory containing your saved plot images
@@ -159,53 +176,67 @@ class Q_learning:
         cv2.destroyAllWindows()
         video.release()
 
-    def test(self, limit):
-
-        s = self.states.index(self.start)
+    def test(self, limit=40):
+        s = self.start
         print("Starting state is '{}'".format(s))
         episode_reward = 0
         env.coin_collected = False
+        env.terminate = False
         for timestep in range(limit):
-            self.env.plot_env_position(self.states[s], timestep)
-            print(self.Q[s])
-            a = np.argmax(self.Q[s])
+            i, j = s
+            print("Step {}".format(timestep))
+            self.env.plot_env_position(s, timestep)
+            print(self.Q[i,j, int(self.env.coin_reached())])
+            a = np.argmax(self.Q[i,j, int(self.env.coin_reached())])
             print(a)
 
             # Environment updating
-            r = env.reward(s, a)
+            r = self.R_mod[i, j, int(self.env.coin_reached()), a]
             print(r)
             episode_reward += r
-            temp_new_s = env.transition(s, a)
+            new_state = self.env.transition_R((i, j), a, reward_type="terminal_movement")
+            new_i, new_j = new_state
+
             #             new_s = self.states.index(temp_new_s)
 
-            if temp_new_s == self.target:
-                self.env.plot_env_position(self.states[temp_new_s], timestep)
+            if env.done():
+                self.env.plot_env_position(new_state, timestep)
                 break
-            s = temp_new_s
-        print(
-            "Episode Reward {}.Q matrix values:\n{}".format(
-                episode_reward, self.Q.round(1)
-            )
-        )
+            s = new_state
+        print('Episode Reward {}.Q matrix values:\n{}'.format(episode_reward, self.Q.round(1)))
         self.create_video()
 
 
-maze = np.array(
-    [
-        [1, 0, 1, 1, 1, 1, 1, 0, 0, 1],
-        [0, 1, 1, 1, 1, 0, 1, 0, 1, 1],
-        [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
-        [0, 1, 1, 0, 0, 0, 0, 0, 1, 0],
-        [1, 0, 0, 0, 0, 0, 0, 1, 0, 0],
-        [0, 0, 0, 0, 1, 1, 0, 1, 0, 0],
-        [1, 1, 1, 0, 0, 1, 0, 0, 0, 1],
-        [0, 1, 0, 0, 0, 0, 0, 0, 1, 1],
-        [1, 1, 1, 1, 0, 1, 0, 1, 1, 0],
-        [0, 1, 0, 0, 1, 1, 1, 0, 0, 1],
-    ]
-)
-env = env = Maze_env((2, 0), (0, 8), (7, 5), maze)
-Q, coord_to_index = env.create_q_matrix()
-q_learning = Q_learning(
-    alpha=1, gamma=0.999, epsilon=1, episodes=5000, steps=2000, env, coord_to_index)
-q_learning.train()
+
+
+if "main":
+    maze = np.array(
+        [
+            [1, 0, 1, 1, 1, 1, 1, 0, 0, 1],
+            [0, 1, 1, 1, 1, 0, 1, 0, 1, 1],
+            [0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+            [0, 1, 1, 0, 0, 0, 0, 0, 1, 0],
+            [1, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 1, 1, 0, 1, 0, 0],
+            [1, 1, 1, 0, 0, 1, 0, 0, 0, 1],
+            [0, 1, 0, 0, 0, 0, 0, 0, 1, 1],
+            [1, 1, 1, 1, 0, 1, 0, 1, 1, 0],
+            [0, 1, 0, 0, 1, 1, 1, 0, 0, 1],
+        ]
+    )
+    env = Maze_env((2, 0), (0, 8), (7, 5), maze)
+
+    q_learning = Q_learning(alpha=1, gamma=0.999, epsilon=1, episodes=400000, steps=200, env=env)
+    print("Info")
+    print(q_learning.R_mod[0, 7, 0])
+    print(q_learning.R_mod[0, 7, 1])
+    print(q_learning.R_mod[7, 5, 0])
+    print(q_learning.R_mod[7, 5, 1])
+    print(q_learning.R_mod[7, 4, 0])
+    print(q_learning.R_mod[7, 4, 1])
+
+
+    q_learning.train()
+    q_learning.plot_rewards()
+    q_learning.test()
+
