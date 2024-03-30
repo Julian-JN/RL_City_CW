@@ -35,7 +35,7 @@ class Q_learning:
         self.steps = steps
         self.start = env.start
         self.target = env.target
-        self.coins = env.coins
+        self.coin = env.coin
         self.env = env
         self.episodes_rewards = []
         self.max_list_size = 10
@@ -116,7 +116,7 @@ class Q_learning:
                 # print(self.env.coin_reached())
                 # print("Reward")
                 episode_reward += r
-                new_state = self.env.transition_R((i, j), a, reward_type="limited_movement")
+                new_state = self.env.transition_R((i, j), a, self.env.reward_type)
                 new_i, new_j = new_state
 
                 if r == 10: # picked up coin for first time
@@ -193,7 +193,7 @@ class Q_learning:
             r = self.R_mod[i, j, int(self.env.coin_reached()), a]
             print(r)
             episode_reward += r
-            new_state = self.env.transition_R((i, j), a, reward_type="terminal_movement")
+            new_state = self.env.transition_R((i, j), a, self.env.reward_type)
             new_i, new_j = new_state
 
             if env.done():
@@ -219,7 +219,7 @@ if __name__ == "__main__":
             [0, 1, 0, 0, 1, 1, 1, 0, 0, 1],
         ]
     )
-    env = Maze_env((2, 0), (0, 8), (7, 5), maze)
+    env = Maze_env(start=(2, 0), target=(0, 8), coin=(7, 5), maze=maze, reward_type="terminal_movement" )
 
     q_learning = Q_learning(alpha=1, gamma=0.999, epsilon=1, episodes=10000, steps=200, env=env)
     print("INFO. State is (ROW, COLUMN IS_COIN). Action is [up, down, left, right]")

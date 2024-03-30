@@ -7,7 +7,7 @@ class Maze_env:
     Represents a maze navigation environment for reinforcement learning tasks.
     It manages the maze layout, positions of start, target, and coin, and rewards/transitions. 
     Functionality includes:
-    - `__init__(start, target, coins, maze)`: Initializes the environment.
+    - `__init__(start, target, coin, maze)`: Initializes the environment.
     - `plot_env()`: Visualizes the maze with important positions highlighted.
     - `plot_env_position(position, timestep)`: Visualizes  maze with agent's position at specific timestep.
     - `create_r_matrix()`: Generates a reward matrix based on the maze layout.
@@ -17,13 +17,14 @@ class Maze_env:
     - `create_q_matrix()`: Initializes a Q-learning matrix for action selection.
     """
 
-    def __init__(self, start, target, coins, maze):
+    def __init__(self, start, target, coin, maze, reward_type):
         self.maze = maze
         self.target = target
         self.start = start
-        self.coins = coins
+        self.coin = coin
+        self.reward_type = reward_type
         self.position = 0
-        self.R = self.create_r_matrix(reward_type="limited_movement")
+        self.R = self.create_r_matrix(self.reward_type)
         print(f" Shape of the R matrix is {self.R.shape}")
         self.Q = self.create_q_matrix()
         print(f" Shape of the Q matrix is {self.Q.shape}")
@@ -37,7 +38,7 @@ class Maze_env:
         maze_plot = self.maze.copy()
         maze_plot[self.target] = 2
         maze_plot[self.start] = 3
-        maze_plot[self.coins] = 4
+        maze_plot[self.coin] = 4
         plt.imshow(maze_plot, cmap=cmap)
         plt.show()
 
@@ -48,13 +49,13 @@ class Maze_env:
         maze_plot = self.maze.copy()
         maze_plot[self.target] = 2
         maze_plot[position] = 3
-        maze_plot[self.coins] = 4
+        maze_plot[self.coin] = 4
         plt.imshow(maze_plot, cmap=cmap)
         plt.savefig(f"img/plot_{timestep:06d}.png", dpi=300)
         plt.show()
         plt.close()
 
-    def create_r_matrix(self, reward_type="terminal_movement"):
+    def create_r_matrix(self, reward_type):
         """
         This synthesizes the reward and transition functions.
         reward_type (str): The type of reward to use.
@@ -85,11 +86,11 @@ class Maze_env:
                                     R[i, j, coin_state, action_index] = -1 # for the fire
                                 elif self.maze[new_i, new_j] == 0:
                                     R[i, j, coin_state, action_index] = -0.005  # for an allowed action
-                                    if (new_i, new_j) == self.coins and not coin_state:
-                                        print("Assigning coin")
+                                    if (new_i, new_j) == self.coin and not coin_state:
+                                        # print("Assigning coin")
                                         R[i, j, coin_state, action_index] = 10  # coin
                                     elif (new_i, new_j) == self.target:
-                                        print("Assigning target")
+                                        # print("Assigning target")
                                         R[i, j, coin_state, action_index] = 1  # target
                             else:
                                 R[i, j, coin_state, action_index] = -1  # actions beyond the limits are forbidden
@@ -117,7 +118,7 @@ class Maze_env:
                                     R[i, j, coin_state, action_index] = None # for the fire
                                 elif self.maze[new_i, new_j] == 0:
                                     R[i, j, coin_state, action_index] = -0.005  # for an allowed action
-                                    if (new_i, new_j) == self.coins and not coin_state:
+                                    if (new_i, new_j) == self.coin and not coin_state:
                                         R[i, j, coin_state, action_index] = 10  # coin
                                     elif (new_i, new_j) == self.target:
                                         R[i, j, coin_state, action_index] = 1  # target
@@ -125,7 +126,7 @@ class Maze_env:
                                 R[i, j, coin_state, action_index] = None  # actions beyond the limits are forbidden
             return R
 
-    def transition_R(self, state, action, reward_type="terminal_movement"):
+    def transition_R(self, state, action, reward_type):
         initial_state = state
         x, y = initial_state
         new_x = x
@@ -145,7 +146,7 @@ class Maze_env:
                     # print("Fire")
                     self.terminate = True
                     return state
-                elif (new_x,new_y) == self.coins and not self.coin_collected: # coin
+                elif (new_x,new_y) == self.coin and not self.coin_collected: # coin
                     # print("Coin")
                     self.coin_collected = True
                     # print(self.coin_collected)
@@ -164,7 +165,7 @@ class Maze_env:
 
         if reward_type == "limited_movement": # should not attempt to access fire or wall
             if new_x >= 0 and new_x < self.maze.shape[0] and new_y >= 0 and new_y < self.maze.shape[1]:
-                if (new_x,new_y) == self.coins and not self.coin_collected: # coin
+                if (new_x,new_y) == self.coin and not self.coin_collected: # coin
                     self.coin_collected = True
                     return new_x,new_y
                 elif (new_x,new_y) == self.target: # target
