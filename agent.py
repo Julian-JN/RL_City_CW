@@ -3,6 +3,7 @@ import cv2
 import os
 from matplotlib import pyplot as plt
 from maze_env import Maze_env
+from tqdm.auto import tqdm
 
 
 class Q_learning:
@@ -43,8 +44,8 @@ class Q_learning:
         self.window_size = 4
         self.current_average = 0
 
-        print("Initial Q matrix shape is '{}'".format(self.Q.shape))
-        print("Initial Q matrix values are '{}'".format(self.Q))
+        # print("Initial Q matrix shape is '{}'".format(self.Q.shape))
+        # print("Initial Q matrix values are '{}'".format(self.Q))
 
     def plot_rewards(self):
         plt.plot(self.episodes_rewards)
@@ -57,7 +58,7 @@ class Q_learning:
     def greedy_policy(self, state):
         i, j = state
         available_actions = np.where(~np.isnan(self.R_mod[i, j, int(self.env.coin_reached())]))[0]
-        print(available_actions)
+        # print(available_actions)
         q_values = [self.Q[i, j, int(self.env.coin_reached()), a] for a in available_actions]
         best_actions = available_actions[np.where(q_values == np.max(q_values))[0]]
         # print(best_actions)
@@ -91,7 +92,7 @@ class Q_learning:
         print("Target is '{}'".format(self.target))
         print("Starting state is '{}'".format(self.start))
 
-        for episode in range(self.episodes):
+        for episode in tqdm(range(self.episodes), desc= f"Training agent on {self.episodes} episodes", unit="episode", total=self.episodes):
             # print("New episode")
             s = self.start
             episode_reward = 0
@@ -144,12 +145,12 @@ class Q_learning:
             window_average = sum(window) / self.window_size
             self.current_average = window_average
 
-            if episode % 5 == 0:
-                print('Episode {} finished. Episode Reward {}. Timesteps {}. Average {}. Epsilon {}'.format(episode,
-                                                                                                         episode_reward,
-                                                                                                         timestep,
-                                                                                                         window_average,
-                                                                                                         self.epsilon))
+            # if episode % 5 == 0:
+            #     print('Episode {} finished. Episode Reward {}. Timesteps {}. Average {}. Epsilon {}'.format(episode,
+            #                                                                                              episode_reward,
+            #                                                                                              timestep,
+            #                                                                                              window_average,
+            #                                                                                              self.epsilon))
             self.epsilon = np.interp(episode, [0, self.episodes], [1, 0.05])
 
     def create_video(self):
@@ -203,7 +204,7 @@ class Q_learning:
         self.create_video()
 
 
-if "main":
+if __name__ == "__main__":
     maze = np.array(
         [
             [1, 0, 1, 1, 1, 1, 1, 0, 0, 1],
@@ -221,16 +222,16 @@ if "main":
     env = Maze_env((2, 0), (0, 8), (7, 5), maze)
 
     q_learning = Q_learning(alpha=1, gamma=0.999, epsilon=1, episodes=10000, steps=200, env=env)
-    print("Info")
-    print(q_learning.R_mod[0, 7, 0])
-    print(q_learning.R_mod[0, 7, 1])
-    print(q_learning.R_mod[7, 5, 0])
-    print(q_learning.R_mod[7, 5, 1])
-    print(q_learning.R_mod[7, 4, 0])
-    print(q_learning.R_mod[7, 4, 1])
+    print("INFO. State is (ROW, COLUMN IS_COIN). Action is [up, down, left, right]")
+    print(f" R values for state (0, 7, 0) {q_learning.R_mod[0, 7, 0]}") 
+    print(f" R values for state (0, 7, 1) {q_learning.R_mod[0, 7, 1]}")
+    print(f" R values for state (7, 5, 0) {q_learning.R_mod[7, 5, 0]}")
+    print(f" R values for state (7, 5, 1) {q_learning.R_mod[7, 5, 1]}")
+    print(f" R values for state (7, 4, 0) {q_learning.R_mod[7, 4, 0]}")
+    print(f" R values for state (7, 4, 1) {q_learning.R_mod[7, 4, 1]}")
 
     q_learning.train()
     q_learning.plot_rewards()
     q_learning.test()
-    print(q_learning.Q[3, 3, 0])
-    print(q_learning.Q[7, 4, 0])
+    print(f" Q values for state (3, 3, 0) {q_learning.Q[3, 3, 0]}")
+    print(f" Q values for state (7, 4, 0) {q_learning.Q[7, 4, 0]}")

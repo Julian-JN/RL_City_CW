@@ -1,4 +1,3 @@
-#%%
 import numpy as np
 from matplotlib import pyplot as plt
 
@@ -25,9 +24,9 @@ class Maze_env:
         self.coins = coins
         self.position = 0
         self.R = self.create_r_matrix(reward_type="limited_movement")
-        print(self.R.shape)
+        print(f" Shape of the R matrix is {self.R.shape}")
         self.Q = self.create_q_matrix()
-        print(self.Q.shape)
+        print(f" Shape of the Q matrix is {self.Q.shape}")
         self.coin_collected = False
         self.terminate = False
 
@@ -68,6 +67,7 @@ class Maze_env:
             (self.maze.shape[0], self.maze.shape[1], coin_states, len(actions)), np.nan)
     
         if reward_type == "terminal_movement":
+            print("Reward type: Terminal Movement")
             # actions beyond limits get -10 (and terminate)
             # actions to a 0 -10 (and terminate)
             # action to coin get 200
@@ -98,7 +98,7 @@ class Maze_env:
             # then add the transition function so that if reward smaller than -1, then terminate.
     
         if reward_type == "limited_movement":
-            print("Limited")
+            print("Reward type: Limited Movement")
             # actions beyond limits get None (can't move)
             # actions to a 0 (get -10)
             # action to coin get 200
@@ -183,7 +183,7 @@ class Maze_env:
         Q = np.zeros_like(self.R)
         return Q
 
-if "main":
+if __name__ == "__main__":
     maze = np.array(
         [
             [1, 0, 1, 1, 1, 1, 1, 0, 0, 1],
@@ -207,5 +207,3 @@ if "main":
     print(env.R[7, 5, 1])
     print(env.R[7, 4, 0])
     print(env.R[7, 4, 1])
-
-
