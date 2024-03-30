@@ -27,9 +27,6 @@ class Q_learning:
         self.gamma = gamma
         self.epsilon = epsilon
         self.temperature = 100.0
-
-        #         self.R = env.R
-        #         self.R_mod = self.R.copy()
         self.R = env.R
         self.R_mod = self.R
         self.Q = env.Q
@@ -49,7 +46,6 @@ class Q_learning:
         print("Initial Q matrix shape is '{}'".format(self.Q.shape))
         print("Initial Q matrix values are '{}'".format(self.Q))
 
-
     def plot_rewards(self):
         plt.plot(self.episodes_rewards)
         plt.show()
@@ -59,11 +55,10 @@ class Q_learning:
         print(self.Q[i, j, int(self.env.coin_reached()), :])
 
     def greedy_policy(self, state):
-        i,j = state
-        available_actions = np.where(~np.isnan(self.R_mod[i,j,int(self.env.coin_reached())]))[0]
-        # print("Action choice")
-        # print(available_actions)
-        q_values = [self.Q[i,j,int(self.env.coin_reached()),a] for a in available_actions]
+        i, j = state
+        available_actions = np.where(~np.isnan(self.R_mod[i, j, int(self.env.coin_reached())]))[0]
+        print(available_actions)
+        q_values = [self.Q[i, j, int(self.env.coin_reached()), a] for a in available_actions]
         best_actions = available_actions[np.where(q_values == np.max(q_values))[0]]
         # print(best_actions)
 
@@ -81,8 +76,9 @@ class Q_learning:
         return a
 
     def softmax_policy(self, state, temperature=1.0):
-        available_actions = np.array([0, 1, 2, 3])
-        q_values = np.array([self.Q[state, a] for a in available_actions])
+        i, j = state
+        available_actions = np.where(~np.isnan(self.R_mod[i, j, int(self.env.coin_reached())]))[0]
+        q_values = [self.Q[i, j, int(self.env.coin_reached()), a] for a in available_actions]
         max_q_value = np.max(q_values)
         exp_values = np.exp((q_values - max_q_value) / temperature)
         action_probs = exp_values / np.sum(exp_values)
@@ -101,36 +97,37 @@ class Q_learning:
             episode_reward = 0
             self.env.coin_collected = False
             self.env.terminate = False
-            self.R_mod = self.R
             # print("New episode")
             for timestep in range(self.steps):
-                print(self.env.coin_reached())
-                i,j = s
-                # print(s)
+                # print(self.env.coin_reached())
+                i, j = s
                 # Epsilon-greedy action choice
                 a = self.greedy_policy(s)
-                # print(a)
                 #                 a = self.softmax_policy(s, self.temperature)
                 # Environment updating
                 # r = env.reward(s, a)
                 # print(self.R_mod[i,j,int(self.env.coin_collected)])
-                r = self.R_mod[i,j,int(self.env.coin_reached()),a]
+                r = self.R_mod[i, j, int(self.env.coin_reached()), a]
                 # print(r)
                 # if self.env.coin_reached():
                 #     print()
                 #     print("Coin collected")
-                    # print(self.env.coin_reached())
+                # print(self.env.coin_reached())
                 # print("Reward")
                 episode_reward += r
-                new_state = self.env.transition_R((i,j),a, reward_type="terminal_movement")
-                if self.env.coin_reached():
-                    if new_state == (0,8):
-                        print("REEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE")
-                        print(r)
-                    print(new_state)
-                # print(new_state)
+                new_state = self.env.transition_R((i, j), a, reward_type="limited_movement")
                 new_i, new_j = new_state
-                self.Q[i,j, int(self.env.coin_reached()),a] = self.Q[i,j,int(self.env.coin_reached()) ,a] + self.alpha * (r + self.gamma * np.max(self.Q[new_i,new_j,int(self.env.coin_reached()), :]) - self.Q[i,j,int(self.env.coin_reached()) ,a])
+
+                if r == 10: # picked up coin for first time
+                    # print("COOOOOOOOOOOOOOOOIIIIIIIINNNNNNNN")
+                    # Current q in state o and next in state 1 for coin_collected
+                    self.Q[i, j, 0, a] = self.Q[i, j, 0, a] + self.alpha * (r + self.gamma * np.max(
+                        self.Q[new_i, new_j, 1, :]) - self.Q[i, j, 0, a])
+                else:
+                    self.Q[i, j, int(self.env.coin_reached()), a] = self.Q[i, j, int(
+                        self.env.coin_reached()), a] + self.alpha * (r + self.gamma * np.max(
+                        self.Q[new_i, new_j, int(self.env.coin_reached()), :]) - self.Q[
+                                                                         i, j, int(self.env.coin_reached()), a])
 
                 if self.env.done():
                     # print("Death")
@@ -148,10 +145,11 @@ class Q_learning:
             self.current_average = window_average
 
             if episode % 5 == 0:
-                print('Episode {} finished. Episode Reward {}. Timesteps {}. Average {}'.format(episode,
-                                                                                                episode_reward,
-                                                                                                timestep,
-                                                                                                window_average))
+                print('Episode {} finished. Episode Reward {}. Timesteps {}. Average {}. Epsilon {}'.format(episode,
+                                                                                                         episode_reward,
+                                                                                                         timestep,
+                                                                                                         window_average,
+                                                                                                         self.epsilon))
             self.epsilon = np.interp(episode, [0, self.episodes], [1, 0.05])
 
     def create_video(self):
@@ -186,8 +184,8 @@ class Q_learning:
             i, j = s
             print("Step {}".format(timestep))
             self.env.plot_env_position(s, timestep)
-            print(self.Q[i,j, int(self.env.coin_reached())])
-            a = np.argmax(self.Q[i,j, int(self.env.coin_reached())])
+            print(self.Q[i, j, int(self.env.coin_reached())])
+            a = np.argmax(self.Q[i, j, int(self.env.coin_reached())])
             print(a)
 
             # Environment updating
@@ -197,16 +195,12 @@ class Q_learning:
             new_state = self.env.transition_R((i, j), a, reward_type="terminal_movement")
             new_i, new_j = new_state
 
-            #             new_s = self.states.index(temp_new_s)
-
             if env.done():
-                self.env.plot_env_position(new_state, timestep)
+                self.env.plot_env_position(new_state, timestep+1)
                 break
             s = new_state
         print('Episode Reward {}.Q matrix values:\n{}'.format(episode_reward, self.Q.round(1)))
         self.create_video()
-
-
 
 
 if "main":
@@ -226,7 +220,7 @@ if "main":
     )
     env = Maze_env((2, 0), (0, 8), (7, 5), maze)
 
-    q_learning = Q_learning(alpha=1, gamma=0.999, epsilon=1, episodes=400000, steps=200, env=env)
+    q_learning = Q_learning(alpha=1, gamma=0.999, epsilon=1, episodes=10000, steps=200, env=env)
     print("Info")
     print(q_learning.R_mod[0, 7, 0])
     print(q_learning.R_mod[0, 7, 1])
@@ -235,8 +229,8 @@ if "main":
     print(q_learning.R_mod[7, 4, 0])
     print(q_learning.R_mod[7, 4, 1])
 
-
     q_learning.train()
     q_learning.plot_rewards()
     q_learning.test()
-
+    print(q_learning.Q[3, 3, 0])
+    print(q_learning.Q[7, 4, 0])
