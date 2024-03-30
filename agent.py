@@ -23,11 +23,12 @@ class Q_learning:
     The class utilizes epsilon-greedy and softmax policies for action selection, balancing the exploration of the state space with the exploitation of known rewards.
     """
 
-    def __init__(self, alpha, gamma, epsilon, episodes, steps, env):
+    def __init__(self, alpha, gamma, epsilon, episodes, steps, env, policy):
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
         self.temperature = 100.0
+        self.policy = policy
         self.R = env.R
         self.R_mod = self.R
         self.Q = env.Q
@@ -103,8 +104,13 @@ class Q_learning:
                 # print(self.env.coin_reached())
                 i, j = s
                 # Epsilon-greedy action choice
-                a = self.greedy_policy(s)
-                #                 a = self.softmax_policy(s, self.temperature)
+                if self.policy == "greedy":
+                    a = self.greedy_policy(s)
+                elif self.policy == "softmax":
+                    a = self.softmax_policy(s, self.temperature)
+                else:
+                    raise ValueError("Policy must be 'greedy' or 'softmax'")
+                #a = self.softmax_policy(s, self.temperature)
                 # Environment updating
                 # r = env.reward(s, a)
                 # print(self.R_mod[i,j,int(self.env.coin_collected)])
@@ -117,6 +123,7 @@ class Q_learning:
                 # print("Reward")
                 episode_reward += r
                 new_state = self.env.transition_R((i, j), a, self.env.reward_type)
+                # print(f"Action is {a}, and state is {(i, j)}")
                 new_i, new_j = new_state
 
                 if r == 10: # picked up coin for first time
@@ -183,15 +190,12 @@ class Q_learning:
         env.terminate = False
         for timestep in range(limit):
             i, j = s
-            print("Step {}".format(timestep))
             self.env.plot_env_position(s, timestep)
-            print(self.Q[i, j, int(self.env.coin_reached())])
             a = np.argmax(self.Q[i, j, int(self.env.coin_reached())])
-            print(a)
 
             # Environment updating
             r = self.R_mod[i, j, int(self.env.coin_reached()), a]
-            print(r)
+            print(f"Step {timestep}. Action is {a}. State is {(i, j)}. Q value of {self.Q[i, j, int(self.env.coin_reached()), a]}. And reward {r}")
             episode_reward += r
             new_state = self.env.transition_R((i, j), a, self.env.reward_type)
             new_i, new_j = new_state
@@ -200,7 +204,7 @@ class Q_learning:
                 self.env.plot_env_position(new_state, timestep+1)
                 break
             s = new_state
-        print('Episode Reward {}.Q matrix values:\n{}'.format(episode_reward, self.Q.round(1)))
+        # print('Episode Reward {}.Q matrix values:\n{}'.format(episode_reward, self.Q.round(1)))
         self.create_video()
 
 
@@ -221,7 +225,7 @@ if __name__ == "__main__":
     )
     env = Maze_env(start=(2, 0), target=(0, 8), coin=(7, 5), maze=maze, reward_type="terminal_movement" )
 
-    q_learning = Q_learning(alpha=1, gamma=0.999, epsilon=1, episodes=10000, steps=200, env=env)
+    q_learning = Q_learning(alpha=1, gamma=0.999, epsilon=1, episodes=10000, steps=200, env=env, policy="greedy")
     print("INFO. State is (ROW, COLUMN IS_COIN). Action is [up, down, left, right]")
     print(f" R values for state (0, 7, 0) {q_learning.R_mod[0, 7, 0]}") 
     print(f" R values for state (0, 7, 1) {q_learning.R_mod[0, 7, 1]}")
