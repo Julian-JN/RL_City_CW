@@ -27,7 +27,7 @@ class Q_learning:
         self.alpha = alpha
         self.gamma = gamma
         self.epsilon = epsilon
-        self.temperature = 100.0
+        self.temperature = 50.0
         self.policy = policy
         self.R = env.R
         self.R_mod = self.R
@@ -77,16 +77,20 @@ class Q_learning:
         # print(a)
         return a
 
-    def softmax_policy(self, state, temperature=1.0):
+    def softmax_policy(self, state):
         i, j = state
         available_actions = np.where(~np.isnan(self.R_mod[i, j, int(self.env.coin_reached())]))[0]
+        # print(f"Available actions: {available_actions}")
         q_values = [self.Q[i, j, int(self.env.coin_reached()), a] for a in available_actions]
         max_q_value = np.max(q_values)
-        exp_values = np.exp((q_values - max_q_value) / temperature)
+        exp_values = np.exp((q_values - max_q_value) / self.temperature)
         action_probs = exp_values / np.sum(exp_values)
-
+        print(f"Actions Probability: {action_probs}")
         # Sample an action based on the probabilities
-        selected_action = np.random.choice(len(action_probs), p=action_probs)
+        selected_action_index = np.random.choice(len(action_probs), p=action_probs)
+        selected_action = available_actions[selected_action_index]
+        # print(f"Selected Action: {selected_action}")
+
         return selected_action
 
     def train(self):
@@ -107,7 +111,7 @@ class Q_learning:
                 if self.policy == "greedy":
                     a = self.greedy_policy(s)
                 elif self.policy == "softmax":
-                    a = self.softmax_policy(s, self.temperature)
+                    a = self.softmax_policy(s)
                 else:
                     raise ValueError("Policy must be 'greedy' or 'softmax'")
                 #a = self.softmax_policy(s, self.temperature)
@@ -152,13 +156,22 @@ class Q_learning:
             window_average = sum(window) / self.window_size
             self.current_average = window_average
 
-            # if episode % 5 == 0:
-            #     print('Episode {} finished. Episode Reward {}. Timesteps {}. Average {}. Epsilon {}'.format(episode,
-            #                                                                                              episode_reward,
-            #                                                                                              timestep,
-            #                                                                                              window_average,
-            #                                                                                              self.epsilon))
+            if episode % 5 == 0:
+                if self.policy == "greedy":
+                    print('Episode {} finished. Episode Reward {}. Timesteps {}. Average {}. Epsilon {}'.format(episode,
+                                                                                                         episode_reward,
+                                                                                                         timestep,
+                                                                                                         window_average,
+                                                                                                         self.epsilon))
+                else:
+                    print('Episode {} finished. Episode Reward {}. Timesteps {}. Average {}. Temp {}'.format(episode,
+                                                                                                         episode_reward,
+                                                                                                         timestep,
+                                                                                                         window_average,
+                                                                                                         self.temperature))
             self.epsilon = np.interp(episode, [0, self.episodes], [1, 0.05])
+            self.temperature = np.interp(episode, [0, self.episodes], [50, 0.001])
+
 
     def create_video(self):
         image_folder = "img"  # Directory containing your saved plot images
@@ -225,7 +238,7 @@ if __name__ == "__main__":
     )
     env = Maze_env(start=(2, 0), target=(0, 8), coin=(7, 5), maze=maze, reward_type="terminal_movement" )
 
-    q_learning = Q_learning(alpha=1, gamma=0.999, epsilon=1, episodes=10000, steps=200, env=env, policy="greedy")
+    q_learning = Q_learning(alpha=1, gamma=0.999, epsilon=1, episodes=20000, steps=200, env=env, policy="softmax")
     print("INFO. State is (ROW, COLUMN IS_COIN). Action is [up, down, left, right]")
     print(f" R values for state (0, 7, 0) {q_learning.R_mod[0, 7, 0]}") 
     print(f" R values for state (0, 7, 1) {q_learning.R_mod[0, 7, 1]}")
