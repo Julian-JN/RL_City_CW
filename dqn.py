@@ -37,18 +37,44 @@ class ReplayMemory(object):
 
 class DQN(nn.Module):
 
-    def __init__(self, n_observations, n_actions, hidden_units=64):
+    def __init__(self, n_observations, n_actions, hidden_units=512):
         super(DQN, self).__init__()
         self.layer1 = nn.Linear(n_observations, hidden_units)
         self.layer2 = nn.Linear(hidden_units, hidden_units)
         self.layer3 = nn.Linear(hidden_units, n_actions)
 
-    # Called with either one element to determine next action, or a batch
-    # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
         x = F.relu(self.layer1(x))
         x = F.relu(self.layer2(x))
         return self.layer3(x)
+
+
+# class DQN(nn.Module): # DQN/DDQN
+#     def __init__(self, input_shape, n_actions):
+#         super(DQN, self).__init__()
+#         self.conv = nn.Sequential(
+#             nn.Conv2d(input_shape[0], 32, kernel_size=8, stride=4),
+#             nn.ReLU(),
+#             nn.Conv2d(32, 64, kernel_size=4, stride=2),
+#             nn.ReLU(),
+#             nn.Conv2d(64, 64, kernel_size=3, stride=1),
+#             nn.ReLU()
+#         )
+#         conv_out_size = self.get_conv_out_size(input_shape)
+#
+#         self.value = nn.Sequential(
+#             nn.Linear(conv_out_size, 512),
+#             nn.ReLU(),
+#             nn.Linear(512, n_actions)
+#         )
+#
+#     def get_conv_out_size(self, shape):
+#         conv_size = self.conv(torch.zeros(1, *shape))
+#         return int(np.prod(conv_size.size()))
+#
+#     def forward(self, x):
+#         conv_out = self.conv(x).view(x.size()[0], -1)
+#         return self.value(conv_out)
 
 
 class Agent:
@@ -61,32 +87,49 @@ class Agent:
         self.GAMMA = 1
         self.update_frequency = 4
         self.update_target_frequency = 1000
-        self.batch_size = 64
+        self.batch_size = 32
 
         # Get number of actions from gym action space
         self.env = env
-        self.n_actions = env.action_space.n
+        self.n_actions = env.action_space.shape[0]
+        num_bins = 61  # Number of bins for each action dimension
+        self.n_actions = num_bins ** self.n_actions
+        print(self.n_actions)
+
+        print(f"Number actions: {self.n_actions}")
         seed = None
         self.random_state = np.random.RandomState() if seed is None else np.random.RandomState(seed)
 
         # Get the number of state observations
         self.state, self.info = env.reset()
-        print(self.state.shape)
+        print(f"State shape: {self.state.shape}")
         self.n_observations = len(self.state)
 
         self.double_dqn = False
-        self.policy_net = DQN(self.n_observations, self.n_actions).to(device)
-        self.target_net = DQN(self.n_observations, self.n_actions).to(device)
+        self.policy_net = DQN(self.n_observations, self.n_actions, hidden_units=512).to(device)
+        self.target_net = DQN(self.n_observations, self.n_actions, hidden_units=512).to(device)
+        print(env.observation_space.shape)
+        # self.policy_net = DQN(env.observation_space.shape, self.n_actions).to(device)
+        # self.target_net = DQN(env.observation_space.shape, self.n_actions).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
         self.memory = ReplayMemory(50000)
-        self.max_episodes = 2000
+        self.max_episodes = 100000
         self.number_episodes = 0
         self.max_timesteps = 2000
         self.number_timesteps = 0
         self.epsilon = 1
 
         self.video = []
+
+    def discrete2cont_action(self, action):
+        # Map the discrete action index to continuous torques
+        num_bins = 61
+        action_indices = np.unravel_index(action, (num_bins, num_bins, num_bins))
+        torque_min = -1.0
+        torque_max = 1.0
+        torques = [torque_min + (torque_max - torque_min) * idx / (num_bins - 1) for idx in action_indices]
+        return np.array(torques)
 
     def has_sufficient_experience(self):
         """True if agent has enough experience to train on a batch of samples; False otherwise."""
@@ -100,12 +143,14 @@ class Agent:
         torch.save(checkpoint, filepath)
 
     def choose_action(self, state):
+        # print(state.shape)
         # need to reshape state array and convert to tensor
-        state_tensor = (torch.from_numpy(state).unsqueeze(dim=0).to(device))
+        state_tensor = (torch.from_numpy(state).unsqueeze(dim=0).to(device)).float()
         # choose uniform at random if agent has insufficient experience
         if not self.has_sufficient_experience():
             action = self.uniform_random_policy(state_tensor)
         else:
+            # print("Sufficient experience")
             action = self.epsilon_greedy_policy(state_tensor, self.epsilon)
         return action
 
@@ -119,9 +164,13 @@ class Agent:
 
     def uniform_random_policy(self, state):
         """Choose an action uniformly at random."""
+        # random_vector = np.random.(low=-1, high=1, size=self.n_actions)
+        # return random_vector
         return self.random_state.randint(self.n_actions)
 
-    def greedy_policy(self, state: torch.Tensor) -> int:
+    def greedy_policy(self, state):
+        # print(state.shape)
+        # print(state.dtype)
         """Choose an action that maximizes the action_values given the current state."""
         action = (self.policy_net(state)
                   .argmax()
@@ -131,6 +180,7 @@ class Agent:
 
     def select_greedy_actions(self, states, q_network):
         _, actions = q_network(states).max(dim=1, keepdim=True)
+        # print(actions)
         return actions
 
     def evaluate_selected_actions(self, states,actions,rewards,dones,gamma,q_network):
@@ -153,10 +203,14 @@ class Agent:
 
     def learn(self, experiences):
         """Update the agent's state based on a collection of recent experiences."""
-        states, actions, rewards, next_states, dones = (torch.Tensor(vs).to(device) for vs in zip(*experiences))
+        states, actions, rewards, next_states, dones = (torch.Tensor(np.array(vs)).to(device) for vs in zip(*experiences))
 
+        # print("learning")
         # need to add second dimension to some tensors
-        actions = (actions.long().unsqueeze(dim=1))
+        # print(actions.shape)
+        # actions = (actions.long().unsqueeze(dim=1))
+        actions = (actions.long()).unsqueeze(dim=1)
+        # print(actions.shape)
         rewards = rewards.unsqueeze(dim=1)
         dones = dones.unsqueeze(dim=1)
 
@@ -166,6 +220,9 @@ class Agent:
         else:
             target_q_values = self.q_learning_update(next_states,rewards,dones,self.GAMMA,self.target_net)
 
+        # print(self.policy_net(states).shape)
+        # print(f"States Shape: {states.shape}")
+        # print(states.dtype)
         online_q_values = (self.policy_net(states).gather(dim=1, index=actions))
         # compute the mean squared loss
         loss = F.mse_loss(online_q_values, target_q_values)
@@ -179,10 +236,7 @@ class Agent:
     def step(self, state, action, reward, next_state, done):
         experience = Transition(state, action, reward, next_state, done)
         self.memory.push(experience)
-
-        if done:
-            self.number_episodes += 1
-        else:
+        if not done:
             self.number_timesteps += 1
 
             # every so often the agent should learn from experiences
@@ -201,22 +255,26 @@ class Agent:
             # if episode_timestep > 1000:
             #     print("Long training")
             action = self.choose_action(state)
-            # print(self.env.step(action))
-            next_state, reward, done, _, _ = self.env.step(action)
+            # print(f"Action Dis: {action} Timestep: {episode_timestep}")
+            action_cont = self.discrete2cont_action(action)
+            # print(f"Action Cont: {action_cont} Timestep: {episode_timestep}")
+            next_state, reward, done, truncated, _ = self.env.step(action_cont)
             # self.env.render()
             self.video.append(self.env.render())
             # print(self.video)
-            save_video(self.video, "videos", fps=25,
-                       episode_trigger=lambda x: x % 200 == 0,
-                       episode_index=self.number_episodes)
             self.step(state, action, reward, next_state, done)
             episode_timestep +=1
             state = next_state
             score += reward
-            if done:
+            if done or truncated:
+                save_video(self.video, "videos", fps=25,
+                           episode_trigger=lambda x: x % 5000 == 0,
+                           episode_index=self.number_episodes)
+                self.number_episodes += 1
                 self.video = []
                 break
-        print(f"Episode {self.number_episodes} finished in {episode_timestep} timesteps")
+        if self.number_episodes % 100 == 0:
+            print(f"Episode {self.number_episodes} finished in {episode_timestep} timesteps score: {score}")
         return score
 
     def train(self):
@@ -238,14 +296,16 @@ class Agent:
                 print(f"\nEnvironment solved in {i:d} episodes!\tAverage Score: {average_score:.2f}")
                 self.save(checkpoint_filepath)
                 break
-            if (i + 1) % 50 == 0:
+            if (i + 1) % 500 == 0:
                 print(f"\rEpisode {i + 1}\tAverage Score: {average_score:.2f} Epsilon: {self.epsilon}")
 
         return scores
 
 
 if "main":
-    env = gym.make('CartPole-v1', render_mode="rgb_array")
+    # env = gym.make('CartPole-v1', render_mode="rgb_array")
+    env = gym.make('Hopper-v4', render_mode="rgb_array")
+
     dqn = Agent(env)
     scores = dqn.train()
     plt.plot(scores)
