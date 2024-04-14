@@ -199,7 +199,7 @@ if __name__ == "__main__":
             [0, 1, 0, 0, 1, 1, 1, 0, 0, 1],
         ]
     )
-    env = Maze_env((2, 0), (0, 8), (7, 5), maze)
+    env = Maze_env((2, 0), (0, 8), (7, 5), maze, reward_type="terminal_movement")
     env.plot_env()
     print("Info")
     print(env.R[0, 7, 0])

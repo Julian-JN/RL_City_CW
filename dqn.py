@@ -306,6 +306,7 @@ class Agent:
             if average_score >= target_score or self.number_timesteps >= 4000000:
                 print(f"\nEnvironment solved in {i:d} episodes!\tAverage Score: {average_score:.2f}")
                 checkpoint_filepath = f"rl_chk/double-dqn-checkpoint{self.number_episodes}.pth"
+                os.makedirs(os.path.dirname(checkpoint_filepath), exist_ok=True)
                 self.save(checkpoint_filepath)
                 break
             elif average_score > best_score:

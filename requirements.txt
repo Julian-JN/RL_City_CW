@@ -5,3 +5,5 @@ torch
 gymnasium
 moviepy
 gymnasium[classic-control]
+gymnasium[atari]
+gymnasium[accept-rom-license]
