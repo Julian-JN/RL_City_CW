@@ -3,3 +3,6 @@ __pycache__/
 .vscode/
 videos/
 img/
+rl_chk/
+prints.txt
+rewards.png
