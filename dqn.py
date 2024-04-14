@@ -16,7 +16,7 @@ import os
 from buffer import ReplayMemory
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(device)
+print(f"Device is {device}")
 
 Transition = namedtuple('Transition',
                         ('state', 'action', 'reward', 'next_state', 'done'))
@@ -134,7 +134,7 @@ class Agent:
     def has_sufficient_experience(self):
         """True if agent has enough experience to train on a batch of samples; False otherwise."""
         # return len(self.memory) >= self.batch_size
-        if len(self.memory) >= 5000 and len(self.memory) <= 5700:
+        if len(self.memory) == 5000:
             print("Sufficient experience recently obtained!!!")
         return len(self.memory) >= 5000
 
