@@ -13,6 +13,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 import os
+from buffer import ReplayMemory
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(device)
@@ -21,21 +22,6 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'reward', 'next_state', 'done'))
 
 # os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128"
-
-class ReplayMemory(object):
-
-    def __init__(self, capacity):
-        self.memory = deque([], maxlen=capacity)
-
-    def push(self, transition):
-        """Add a new experience to memory."""
-        self.memory.append(transition)
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-    def __len__(self):
-        return len(self.memory)
 
 
 class DQN(nn.Module):
@@ -81,7 +67,7 @@ class DQNCNN(nn.Module): # DQN/DDQN
 
 
 class Agent:
-    def __init__(self, env):
+    def __init__(self, env, per=False ):
         self.GAMMA = 0.99
         self.TAU = 0.005
         self.LR = 1e-4
@@ -89,6 +75,8 @@ class Agent:
         self.update_frequency = 4
         self.update_target_frequency = 10000
         self.batch_size = 32
+        
+        self.per = per
 
         # Get number of actions from gym action space
         self.env = env
@@ -117,7 +105,15 @@ class Agent:
         # self.target_net = DQN(env.observation_space.shape, self.n_actions).to(device)
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
-        self.memory = ReplayMemory(100000)
+
+        self.replay = ReplayMemory(100000, use_per = self.per)
+        if self.per:
+            self.alpha = self.replay.alpha
+            self.sum_tree = self.replay.sum_tree
+            self.max_priority = self.replay.max_priority
+        
+        self.memory = self.replay.memory
+        
         self.max_episodes = 5000
         self.number_episodes = 0
         self.max_timesteps = 2000
@@ -138,6 +134,8 @@ class Agent:
     def has_sufficient_experience(self):
         """True if agent has enough experience to train on a batch of samples; False otherwise."""
         # return len(self.memory) >= self.batch_size
+        if len(self.memory) >= 5000 and len(self.memory) <= 5700:
+            print("Sufficient experience recently obtained!!!")
         return len(self.memory) >= 5000
 
     def save(self, filepath):
@@ -206,15 +204,16 @@ class Agent:
         q_values = self.evaluate_selected_actions(states, actions, rewards, dones, gamma, q_network2)
         return q_values
 
-    def learn(self, experiences):
+    def learn(self, experiences, is_weights, idxs):
         """Update the agent's state based on a collection of recent experiences."""
         states, actions, rewards, next_states, dones = (torch.Tensor(np.array(vs)).to(device) for vs in zip(*experiences))
 
         # print("learning")
         # need to add second dimension to some tensors
         # print(actions.shape)
-        actions = (actions.long()).unsqueeze(dim=1)
         # print(actions.shape)
+        
+        actions = (actions.long()).unsqueeze(dim=1)
         rewards = rewards.unsqueeze(dim=1)
         dones = dones.unsqueeze(dim=1)
 
@@ -228,23 +227,35 @@ class Agent:
         # print(f"States Shape: {states.shape}")
         online_q_values = (self.policy_net(states).gather(dim=1, index=actions))
         # compute the mean squared loss
-        loss = F.mse_loss(online_q_values, target_q_values)
+        # loss = F.mse_loss(online_q_values, target_q_values)
+        losses = F.mse_loss(online_q_values, target_q_values, reduction='none')
+        td_errors = torch.sqrt(losses)  # used for PER
+        is_weights_tensor = torch.tensor(np.array(is_weights), dtype=torch.float32, device=device)
+        weighted_losses = losses * is_weights_tensor  # Apply IS weights
+        loss = weighted_losses.mean()
+        
         # updates the parameters of the online network
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
+        
+        # priorities = np.abs(td_errors) + self.epsilon
+
+        if self.replay.use_per:
+            self.replay.update_priority(idxs, td_errors.cpu().detach().numpy()) #necessary?
+            
         if self.number_timesteps % self.update_target_frequency == 0:
             self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def step(self, state, action, reward, next_state, done):
         experience = Transition(state, action, reward, next_state, done)
-        self.memory.push(experience)
+        self.replay.push(experience)
         if not done:
             self.number_timesteps += 1
             # every so often the agent should learn from experiences
             if self.number_timesteps % self.update_frequency == 0 and self.has_sufficient_experience():
-                experiences = self.memory.sample(self.batch_size)
-                self.learn(experiences)
+                batch, idxs, is_weights = self.replay.sample(self.batch_size)
+                self.learn(experiences=batch, is_weights=is_weights, idxs=idxs)
 
     def train_for_at_most(self):
         """Train agent for a maximum number of timesteps."""
@@ -343,7 +354,7 @@ if "main":
     env = Preprocessing_env(env)
     # env = gym.make('Hopper-v4')
 
-    dqn = Agent(env)
+    dqn = Agent(env, per=True)
     scores = dqn.train()
     plt.plot(scores)
     plt.savefig("rewards.png")
