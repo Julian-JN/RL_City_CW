@@ -71,18 +71,24 @@ class SumTree:
         self.write = 0
 
     def _propagate(self, tree_idx, change):
-        parent = (tree_idx - 1) // 2
-        self.tree[parent] += change
-        if parent != 0:
-            self._propagate(parent, change)
+        """For a given change/update on a tree_idx (leaf, so second half of the list),
+          propagate the change to the root node to just its parent.
+          If its parent is not root, it pass it to its parent..."""
+        parent_idx = (tree_idx - 1) // 2
+        self.tree[parent_idx] += change
+        if parent_idx != 0:
+            self._propagate(parent_idx, change)
 
     def update(self, idx, priority):
+        """Updates the whole tree after receviving a new priority
+        for an specific tree index, by propagating the change."""
         tree_idx = idx + self.capacity - 1
         change = priority - self.tree[tree_idx]
         self.tree[tree_idx] = priority
         self._propagate(tree_idx, change)
 
     def add(self, priority):
+        """Add a new priority to the tree, and update the tree."""
         self.update(self.write, priority)
         self.write = (self.write + 1) % self.capacity
 
@@ -91,7 +97,7 @@ class SumTree:
         while True:
             left = 2 * tree_idx + 1
             right = left + 1
-            if left >= len(self.tree):
+            if left > len(self.tree):  # >= would provoke a very hard to debug error hehe
                 break
             if s <= self.tree[left]:
                 tree_idx = left
@@ -100,7 +106,7 @@ class SumTree:
                 tree_idx = right
         idx = tree_idx - self.capacity + 1
         if idx < 0 or idx >= self.capacity:
-            raise ValueError(f"Index {idx} out of range. Tree index: {tree_idx}")
+            raise ValueError(f"Data index {idx} out of range. Tree index: {tree_idx}")
         if tree_idx < 0 or tree_idx >= len(self.tree):
             raise ValueError(f"Tree index {tree_idx} out of range.")
         return tree_idx, idx  # Return the index of the data in the ReplayMemory 
