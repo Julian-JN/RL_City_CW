@@ -96,6 +96,8 @@ class Agent:
         self.n_actions = 4
         print(self.n_actions)
 
+        self.number_lives = 5
+
         print(f"Number actions: {self.n_actions}")
         seed = None
         self.random_state = np.random.RandomState() if seed is None else np.random.RandomState(seed)
@@ -252,8 +254,9 @@ class Agent:
             # print(f"Action Dis: {action} Timestep: {episode_timestep}")
             # action_cont = self.discrete2cont_action(action)
             # print(f"Action Cont: {action_cont} Timestep: {episode_timestep}")
-            next_state, reward, done, truncated, _ = self.env.step(action)
+            next_state, reward, done, truncated, info = self.env.step(action)
             if info.get("lives") < self.number_lives:
+                self.number_lives = info.get("lives")
                 next_state, _, _, _, _ = self.env.step(1)
 
             # self.env.render()
