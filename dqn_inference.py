@@ -242,6 +242,8 @@ class Agent:
         score = 0
         done = False
         episode_timestep = 0
+        state, _, _, _, _ = self.env.step(1)
+
         # for t in range(self.max_timesteps):
         while not done:
             # if episode_timestep > 1000:
@@ -251,6 +253,9 @@ class Agent:
             # action_cont = self.discrete2cont_action(action)
             # print(f"Action Cont: {action_cont} Timestep: {episode_timestep}")
             next_state, reward, done, truncated, _ = self.env.step(action)
+            if info.get("lives") < self.number_lives:
+                next_state, _, _, _, _ = self.env.step(1)
+
             # self.env.render()
             self.video.append(self.env.render())
             # print(self.video)

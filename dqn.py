@@ -67,14 +67,14 @@ class DQNCNN(nn.Module): # DQN/DDQN
 
 
 class Agent:
-    def __init__(self, env, per=False ):
+    def __init__(self, env, per=False, double = False):
         self.GAMMA = 0.99
         self.TAU = 0.005
         self.LR = 1e-4
         self.ALPHA = 1
         self.update_frequency = 4
         self.update_target_frequency = 10000
-        self.batch_size = 32
+        self.batch_size = 64
         
         self.per = per
 
@@ -97,7 +97,7 @@ class Agent:
         # self.n_observations = len(self.state)
         self.n_observations = self.state.shape
         print(self.n_observations)
-        self.double_dqn = False
+        self.double_dqn = double
         self.policy_net = DQNCNN(self.n_observations, self.n_actions, hidden_units=512).to(device)
         self.target_net = DQNCNN(self.n_observations, self.n_actions, hidden_units=512).to(device)
         print(env.observation_space.shape)
@@ -280,7 +280,7 @@ class Agent:
             if info.get("lives") < self.number_lives:
                 self.number_lives = info.get("lives")
                 self.step(state, action, reward, next_state, True)
-                state, _, _, _, _ = self.env.step(1)
+                next_state, _, _, _, _ = self.env.step(1)
 
             else:
                 self.step(state, action, reward, next_state, done)
@@ -354,7 +354,7 @@ if "main":
     env = Preprocessing_env(env)
     # env = gym.make('Hopper-v4')
 
-    dqn = Agent(env, per=True)
+    dqn = Agent(env, per=False, double=True)
     scores = dqn.train()
     plt.plot(scores)
     plt.savefig("rewards.png")
