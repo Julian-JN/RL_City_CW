@@ -137,6 +137,13 @@ class Agent:
             print("Sufficient experience recently obtained!!!")
         return len(self.memory) >= 5000
 
+    def has_full_experience(self):
+        """True if agent has enough experience to train on a batch of samples; False otherwise."""
+        # return len(self.memory) >= self.batch_size
+        if len(self.memory) == 100000:
+            print("Full experience!!")
+        return len(self.memory) >= 100000
+
     def save(self, filepath):
         checkpoint = {
             "q-network-state": self.policy_net.state_dict(),
@@ -240,6 +247,8 @@ class Agent:
             self.number_timesteps += 1
             # every so often the agent should learn from experiences
             if self.number_timesteps % self.update_frequency == 0 and self.has_sufficient_experience():
+                if self.has_full_experience():
+                    print("Full babyyy")
                 batch, idxs, is_weights = self.replay.sample(self.batch_size)
                 self.learn(experiences=batch, is_weights=is_weights, idxs=idxs)
 
@@ -296,7 +305,7 @@ class Agent:
             most_recent_scores.append(score)
 
             average_score = sum(most_recent_scores) / len(most_recent_scores)
-            if average_score >= target_score or self.number_timesteps >= 3000000: # 3 million episode limit
+            if average_score >= target_score or self.number_timesteps >= 4000000: # 3 million episode limit
                 print(f"\nEnvironment solved in {i:d} episodes!\tAverage Score: {average_score:.2f}")
                 checkpoint_filepath = f"rl_chk/double-dqn-checkpoint{self.number_episodes}.pth"
                 os.makedirs(os.path.dirname(checkpoint_filepath), exist_ok=True)
