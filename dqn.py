@@ -69,7 +69,6 @@ class DQNCNN(nn.Module): # DQN/DDQN
 class Agent:
     def __init__(self, env, per=False, double = False):
         self.GAMMA = 0.99
-        self.TAU = 0.005
         self.LR = 1e-4
         self.ALPHA = 1
         self.update_frequency = 4
@@ -208,11 +207,6 @@ class Agent:
         """Update the agent's state based on a collection of recent experiences."""
         states, actions, rewards, next_states, dones = (torch.Tensor(np.array(vs)).to(device) for vs in zip(*experiences))
 
-        # print("learning")
-        # need to add second dimension to some tensors
-        # print(actions.shape)
-        # print(actions.shape)
-        
         actions = (actions.long()).unsqueeze(dim=1)
         rewards = rewards.unsqueeze(dim=1)
         dones = dones.unsqueeze(dim=1)
@@ -222,24 +216,16 @@ class Agent:
                                                             self.target_net)
         else:
             target_q_values = self.q_learning_update(next_states,rewards,dones,self.GAMMA,self.target_net)
-
-        # print(self.policy_net(states).shape)
-        # print(f"States Shape: {states.shape}")
         online_q_values = (self.policy_net(states).gather(dim=1, index=actions))
-        # compute the mean squared loss
-        # loss = F.mse_loss(online_q_values, target_q_values)
         losses = F.mse_loss(online_q_values, target_q_values, reduction='none')
         td_errors = torch.sqrt(losses)  # used for PER
         is_weights_tensor = torch.tensor(np.array(is_weights), dtype=torch.float32, device=device)
         weighted_losses = losses * is_weights_tensor  # Apply IS weights
         loss = weighted_losses.mean()
-        
         # updates the parameters of the online network
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
-        
-        # priorities = np.abs(td_errors) + self.epsilon
 
         if self.replay.use_per:
             self.replay.update_priority(idxs, td_errors.cpu().detach().numpy()) #necessary?
@@ -268,15 +254,11 @@ class Agent:
         episode_timestep = 0
         # for t in range(self.max_timesteps):
         while not done:
-            # if episode_timestep > 1000:
-            #     print("Long training")
             action = self.choose_action(state)
             # print(f"Action Dis: {action} Timestep: {episode_timestep}")
             # action_cont = self.discrete2cont_action(action)
             next_state, reward, done, truncated, info = self.env.step(action)
             reward = min(1, reward)
-            # if reward == 0:
-            #     reward = -0.001
             if info.get("lives") < self.number_lives:
                 self.number_lives = info.get("lives")
                 self.step(state, action, reward, next_state, True)
@@ -314,7 +296,7 @@ class Agent:
             most_recent_scores.append(score)
 
             average_score = sum(most_recent_scores) / len(most_recent_scores)
-            if average_score >= target_score or self.number_timesteps >= 4000000:
+            if average_score >= target_score or self.number_timesteps >= 3000000: # 3 million episode limit
                 print(f"\nEnvironment solved in {i:d} episodes!\tAverage Score: {average_score:.2f}")
                 checkpoint_filepath = f"rl_chk/double-dqn-checkpoint{self.number_episodes}.pth"
                 os.makedirs(os.path.dirname(checkpoint_filepath), exist_ok=True)
@@ -327,7 +309,7 @@ class Agent:
                 with open('prints.txt', 'a') as f:
                     f.write("\nSaving checkpoint")
                 print("Saving checkpoint")
-                checkpoint_filepath = f"rl_chk/double-dqn-checkpoint.pth"
+                checkpoint_filepath = f"rl_chk/dqn-checkpoint_3mil.pth"
                 self.save(checkpoint_filepath)
             if (i + 1) % 100 == 0:
                 plt.plot(scores)
@@ -354,7 +336,7 @@ if "main":
     env = Preprocessing_env(env)
     # env = gym.make('Hopper-v4')
 
-    dqn = Agent(env, per=False, double=True)
+    dqn = Agent(env, per=True, double=False)
     scores = dqn.train()
     plt.plot(scores)
     plt.savefig("rewards.png")
