@@ -156,22 +156,37 @@ class Q_learning:
             window_average = sum(window) / self.window_size
             self.current_average = window_average
 
-            if episode % 5 == 0:
+            if episode == self.episodes - 1:
                 if self.policy == "greedy":
-                    print('Episode {} finished. Episode Reward {}. Timesteps {}. Average {}. Epsilon {}'.format(episode,
-                                                                                                         episode_reward,
-                                                                                                         timestep,
-                                                                                                         window_average,
-                                                                                                         self.epsilon))
-                else:
-                    print('Episode {} finished. Episode Reward {}. Timesteps {}. Average {}. Temp {}'.format(episode,
-                                                                                                         episode_reward,
-                                                                                                         timestep,
-                                                                                                         window_average,
-                                                                                                         self.temperature))
-            self.epsilon = np.interp(episode, [0, self.episodes], [1, 0.05])
-            self.temperature = np.interp(episode, [0, self.episodes], [50, 0.001])
 
+                    print(
+                        "Episode {} finished. Episode Reward {}. Timesteps {}. Average {}. Epsilon {}".format(
+                            episode,
+                            episode_reward,
+                            timestep,
+                            window_average,
+                            self.epsilon,
+                        )
+                    )
+                else:
+                    print(
+                        "Episode {} finished. Episode Reward {}. Timesteps {}. Average {}. Temp {}".format(
+                            episode,
+                            episode_reward,
+                            timestep,
+                            window_average,
+                            self.temperature,
+                        )
+                    )
+            # self.epsilon = np.interp(episode, [0, self.episodes], [1, 0.05])
+            lambda_rate = 0.1
+            self.epsilon = 0.05 + (1 - 0.05) * np.exp(-lambda_rate * episode)
+
+            #self.temperature = np.interp(episode, [0, self.episodes], [50, 0.001])
+            lambda_rate_temp = 0.1
+            self.temperature = 0.001 + (50 - 0.001) * np.exp(
+                -lambda_rate_temp * episode
+            )
 
     def create_video(self):
         image_folder = "img"  # Directory containing your saved plot images
