@@ -14,6 +14,7 @@ import torch.nn.functional as F
 import numpy as np
 import os
 from buffer import ReplayMemory
+from logger import Logger
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"Device is {device}")
@@ -21,7 +22,7 @@ print(f"Device is {device}")
 Transition = namedtuple('Transition',
                         ('state', 'action', 'reward', 'next_state', 'done'))
 
-# os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128"
+os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128"
 
 
 class DQN(nn.Module):
@@ -67,19 +68,35 @@ class DQNCNN(nn.Module): # DQN/DDQN
 
 
 class Agent:
-    def __init__(self, env, per=False, double = False):
+    def __init__(self, env, per=False, double = False, logger = None):
+
+        self.logger = logger
         self.GAMMA = 0.99
         self.LR = 1e-4
         self.ALPHA = 1
         self.update_frequency = 4
-        self.update_target_frequency = 10000
+        self.update_target_frequency = 10000 # 20k for tuned ddqn
         self.batch_size = 64
-        
         self.per = per
+        self.double_dqn = double
+
+        self.replay = ReplayMemory(100000, use_per=self.per)
+        if self.per:
+            self.alpha = self.replay.alpha
+            self.sum_tree = self.replay.sum_tree
+            self.max_priority = self.replay.max_priority
+        self.memory = self.replay.memory
+
+        self.max_episodes = 5000
+        self.number_episodes = 0
+        self.max_timesteps = 2000
+        self.number_timesteps = 0
+        self.epsilon = 1
 
         # Get number of actions from gym action space
         self.env = env
         self.n_actions = 4
+        self.number_lives = 5
         # self.n_actions = env.action_space.shape[0]
         # num_bins = 61  # Number of bins for each action dimension
         # self.n_actions = num_bins ** self.n_actions
@@ -90,34 +107,17 @@ class Agent:
 
         # Get the number of state observations
         self.state, self.info = env.reset()
-        self.number_lives = 5
-        # print(self.state.shape)
         print(f"State shape: {self.state.shape}")
         # self.n_observations = len(self.state)
         self.n_observations = self.state.shape
-        print(self.n_observations)
-        self.double_dqn = double
         self.policy_net = DQNCNN(self.n_observations, self.n_actions, hidden_units=512).to(device)
         self.target_net = DQNCNN(self.n_observations, self.n_actions, hidden_units=512).to(device)
+        self.target_net.load_state_dict(self.policy_net.state_dict())
+        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
+        print(self.n_observations)
         print(env.observation_space.shape)
         # self.policy_net = DQN(env.observation_space.shape, self.n_actions).to(device)
         # self.target_net = DQN(env.observation_space.shape, self.n_actions).to(device)
-        self.target_net.load_state_dict(self.policy_net.state_dict())
-        self.optimizer = optim.AdamW(self.policy_net.parameters(), lr=self.LR, amsgrad=True)
-
-        self.replay = ReplayMemory(100000, use_per = self.per)
-        if self.per:
-            self.alpha = self.replay.alpha
-            self.sum_tree = self.replay.sum_tree
-            self.max_priority = self.replay.max_priority
-        
-        self.memory = self.replay.memory
-        
-        self.max_episodes = 5000
-        self.number_episodes = 0
-        self.max_timesteps = 2000
-        self.number_timesteps = 0
-        self.epsilon = 1
 
         self.video = []
 
@@ -141,8 +141,7 @@ class Agent:
         """True if agent has enough experience to train on a batch of samples; False otherwise."""
         # return len(self.memory) >= self.batch_size
         if len(self.memory) == 100000:
-            print("Full experience!!")
-        return len(self.memory) >= 100000
+            return len(self.memory) >= 100000
 
     def save(self, filepath):
         checkpoint = {
@@ -247,8 +246,7 @@ class Agent:
             self.number_timesteps += 1
             # every so often the agent should learn from experiences
             if self.number_timesteps % self.update_frequency == 0 and self.has_sufficient_experience():
-                if self.has_full_experience():
-                    print("Full babyyy")
+
                 batch, idxs, is_weights = self.replay.sample(self.batch_size)
                 self.learn(experiences=batch, is_weights=is_weights, idxs=idxs)
 
@@ -293,7 +291,7 @@ class Agent:
     def train(self):
         scores = []
         target_score = float("inf")
-        most_recent_scores = deque(maxlen=10)
+        most_recent_scores = deque(maxlen=100)
         best_score = float("-inf")
         self.policy_net.train()
         self.target_net.train()
@@ -301,10 +299,12 @@ class Agent:
             f.write("Starting prints")
         for i in range(self.max_episodes):
             score = self.train_for_at_most()
+            logger.log({'Score': score})
             scores.append(score)
             most_recent_scores.append(score)
+            average_score = np.mean(most_recent_scores)
+            logger.log({'Mean Score 100 Episodes': average_score})
 
-            average_score = sum(most_recent_scores) / len(most_recent_scores)
             if average_score >= target_score or self.number_timesteps >= 4000000: # 3 million episode limit
                 print(f"\nEnvironment solved in {i:d} episodes!\tAverage Score: {average_score:.2f}")
                 checkpoint_filepath = f"rl_chk/double-dqn-checkpoint{self.number_episodes}.pth"
@@ -313,12 +313,12 @@ class Agent:
                 break
             elif average_score > best_score:
                 best_score = average_score
-                plt.plot(scores)
+                plt.plot(average_score)
                 plt.savefig("rewards.png")
                 with open('prints.txt', 'a') as f:
                     f.write("\nSaving checkpoint")
                 print("Saving checkpoint")
-                checkpoint_filepath = f"rl_chk/dqn-checkpoint_3mil.pth"
+                checkpoint_filepath = f"rl_chk/dqn-checkpoint_4mil.pth"
                 self.save(checkpoint_filepath)
             if (i + 1) % 100 == 0:
                 plt.plot(scores)
@@ -342,10 +342,15 @@ def Preprocessing_env(env):
 if "main":
     # env = gym.make('CartPole-v1', render_mode="rgb_array")
     env = gym.make("BreakoutNoFrameskip-v4", render_mode="rgb_array")
-    env = Preprocessing_env(env)
     # env = gym.make('Hopper-v4')
+    env = Preprocessing_env(env)
 
-    dqn = Agent(env, per=True, double=False)
+    wandb_logger = Logger(
+        f"Double-DQN",
+        project='INM707-Task2')
+    logger = wandb_logger.get_logger()
+
+    dqn = Agent(env, per=False, double=True, logger = logger)
     scores = dqn.train()
     plt.plot(scores)
     plt.savefig("rewards.png")
