@@ -1,8 +1,7 @@
 .venv/
 __pycache__/
 .vscode/
-videos/
+wandb/
 img/
-rl_chk/
 prints.txt
 rewards.png

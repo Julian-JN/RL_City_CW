@@ -15,25 +15,6 @@ import numpy as np
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-Transition = namedtuple('Transition',
-                        ('state', 'action', 'reward', 'next_state', 'done'))
-
-
-class ReplayMemory(object):
-
-    def __init__(self, capacity):
-        self.memory = deque([], maxlen=capacity)
-
-    def push(self, transition):
-        """Add a new experience to memory."""
-        self.memory.append(transition)
-
-    def sample(self, batch_size):
-        return random.sample(self.memory, batch_size)
-
-    def __len__(self):
-        return len(self.memory)
-
 
 class DQN(nn.Module):
 
@@ -80,21 +61,10 @@ class DQNCNN(nn.Module): # DQN/DDQN
 class Agent:
     def __init__(self, env, per=False, double=False, logger=None):
         self.logger = logger
-        self.GAMMA = 0.99
-        self.LR = 1e-4
-        self.ALPHA = 1
-        self.update_frequency = 4
-        self.update_target_frequency = 10000  # 20k for tuned ddqn
-        self.batch_size = 64
-        self.per = per
-        self.double_dqn = double
-
-        self.max_episodes = 5000
-        self.number_episodes = 0
-        self.max_timesteps = 2000
+        self.max_timesteps = 5000
         self.number_timesteps = 0
+        self.number_episodes = 0
         self.epsilon = 1
-
         # Get number of actions from gym action space
         self.env = env
         self.n_actions = 4
@@ -112,9 +82,8 @@ class Agent:
         print(f"State shape: {self.state.shape}")
         # self.n_observations = len(self.state)
         self.n_observations = self.state.shape
-        checkpoint = torch.load(f"rl_chk/dqn-checkpointfinal.pth")
+        checkpoint = torch.load(f"rl_chk/double-dqn-checkpoint_4mil.pth")
         self.policy_net = DQNCNN(self.n_observations, self.n_actions, hidden_units=512).to(device)
-        self.target_net = DQNCNN(self.n_observations, self.n_actions, hidden_units=512).to(device)
         self.policy_net.load_state_dict(checkpoint['q-network-state'])
 
         print(self.n_observations)
@@ -135,7 +104,6 @@ class Agent:
     def choose_action(self, state):
         # need to reshape state array and convert to tensor
         state_tensor = (torch.from_numpy(np.array(state)).unsqueeze(dim=0).to(device)).float()
-        # choose uniform at random if agent has insufficient experience
         action = self.epsilon_greedy_policy(state_tensor, self.epsilon)
         return action
 
@@ -176,6 +144,7 @@ class Agent:
         done = False
         episode_timestep = 0
         state, _, _, _, _ = self.env.step(1)
+        self.policy_net.eval()
         with torch.no_grad():
             for t in range(self.max_timesteps):
         #     while not done:
@@ -192,11 +161,17 @@ class Agent:
                 state = next_state
                 score += reward
                 if done or truncated:
-                    save_video(self.video, "videos", fps=25, name_prefix="dqn_video")
+                    print("GAME OVER!")
+                    save_video(self.video, "videos", fps=25, name_prefix="video-inference")
                     self.number_episodes += 1
                     self.video = []
                     break
             print(f"Episode {self.number_episodes} finished in {episode_timestep} timesteps score: {score}")
+            if not done:
+                print("TOO LONG!")
+                save_video(self.video, "videos", fps=25, name_prefix="video-inference")
+                self.number_episodes += 1
+                self.video = []
         return score
 
     def train(self):

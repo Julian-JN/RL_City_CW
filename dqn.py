@@ -235,9 +235,7 @@ class Agent:
 
         if self.replay.use_per:
             self.replay.update_priority(idxs, td_errors.cpu().detach().numpy()) #necessary?
-            
-        if self.number_timesteps % self.update_target_frequency == 0:
-            self.target_net.load_state_dict(self.policy_net.state_dict())
+
 
     def step(self, state, action, reward, next_state, done):
         experience = Transition(state, action, reward, next_state, done)
@@ -249,6 +247,9 @@ class Agent:
 
                 batch, idxs, is_weights = self.replay.sample(self.batch_size)
                 self.learn(experiences=batch, is_weights=is_weights, idxs=idxs)
+
+            if self.number_timesteps % self.update_target_frequency == 0:
+                self.target_net.load_state_dict(self.policy_net.state_dict())
 
     def train_for_at_most(self):
         """Train agent for a maximum number of timesteps."""
@@ -307,7 +308,7 @@ class Agent:
 
             if average_score >= target_score or self.number_timesteps >= 4000000: # 3 million episode limit
                 print(f"\nEnvironment solved in {i:d} episodes!\tAverage Score: {average_score:.2f}")
-                checkpoint_filepath = f"rl_chk/double-dqn-checkpoint{self.number_episodes}.pth"
+                checkpoint_filepath = f"rl_chk/new-dqn-per-checkpoint{self.number_episodes}.pth"
                 os.makedirs(os.path.dirname(checkpoint_filepath), exist_ok=True)
                 self.save(checkpoint_filepath)
                 break
@@ -318,7 +319,7 @@ class Agent:
                 with open('prints.txt', 'a') as f:
                     f.write("\nSaving checkpoint")
                 print("Saving checkpoint")
-                checkpoint_filepath = f"rl_chk/dqn-checkpoint_4mil.pth"
+                checkpoint_filepath = f"rl_chk/new-dqn-per-checkpoint_4mil.pth"
                 self.save(checkpoint_filepath)
             if (i + 1) % 100 == 0:
                 plt.plot(scores)
@@ -346,11 +347,11 @@ if "main":
     env = Preprocessing_env(env)
 
     wandb_logger = Logger(
-        f"Double-DQN",
+        f"PER-DQN-New",
         project='INM707-Task2')
     logger = wandb_logger.get_logger()
 
-    dqn = Agent(env, per=False, double=True, logger = logger)
+    dqn = Agent(env, per=True, double=False, logger = logger)
     scores = dqn.train()
     plt.plot(scores)
     plt.savefig("rewards.png")
