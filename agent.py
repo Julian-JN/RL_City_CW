@@ -179,16 +179,15 @@ class Q_learning:
                             self.temperature,
                         )
                     )
-            # self.epsilon = np.interp(episode, [0, self.episodes], [1, 0.05])
-            lambda_rate = 0.001
+            lambda_rate = 0.1
             mimimum_epsilon = 0.00
-            self.epsilon = mimimum_epsilon + (1 - mimimum_epsilon) * np.exp(-lambda_rate * episode)
+            initial_epsilon = 1
+            self.epsilon = mimimum_epsilon + (initial_epsilon - mimimum_epsilon) * np.exp(-lambda_rate * episode)
 
-            #self.temperature = np.interp(episode, [0, self.episodes], [50, 0.001])
-            lambda_rate_temp = 0.6
-            self.temperature = 0.001 + (50 - 0.001) * np.exp(
-                -lambda_rate_temp * episode
-            )
+            lambda_rate_temp = 0.1
+            minimum_temperature = 0.001
+            initial_temperature = 5
+            self.temperature = minimum_temperature + (initial_temperature - minimum_temperature) * np.exp(-lambda_rate_temp * episode)
 
     def create_video(self):
         image_folder = "img"  # Directory containing your saved plot images
@@ -253,9 +252,9 @@ if __name__ == "__main__":
             [0, 1, 0, 0, 1, 1, 1, 0, 0, 1],
         ]
     )
-    env = Maze_env(start=(2, 0), target=(0, 8), coin=(7, 5), maze=maze, reward_type="terminal_movement" )
+    env = Maze_env(start=(2, 0), target=(0, 8), coin=(7, 5), maze=maze, reward_type="limited_movement" )
 
-    q_learning = Q_learning(alpha=0.9, gamma=0.85, epsilon=1, episodes=250, steps=200, env=env, policy="greedy")
+    q_learning = Q_learning(alpha=0.9, gamma=0.85, epsilon=1, episodes=250, steps=200, env=env, policy="softmax")
     print("INFO. State is (ROW, COLUMN IS_COIN). Action is [up, down, left, right]")
     print(f" R values for state (0, 7, 0) {q_learning.R_mod[0, 7, 0]}") 
     print(f" R values for state (0, 7, 1) {q_learning.R_mod[0, 7, 1]}")
