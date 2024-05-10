@@ -1,15 +1,11 @@
 import gymnasium as gym
 from gymnasium.utils.save_video import save_video
 
-import math
-import random
-import matplotlib
 import matplotlib.pyplot as plt
 from collections import namedtuple, deque
 from itertools import count
 import torch
 import torch.nn as nn
-import torch.optim as optim
 import torch.nn.functional as F
 import numpy as np
 
@@ -69,9 +65,7 @@ class Agent:
         self.env = env
         self.n_actions = 4
         self.number_lives = 5
-        # self.n_actions = env.action_space.shape[0]
-        # num_bins = 61  # Number of bins for each action dimension
-        # self.n_actions = num_bins ** self.n_actions
+
         print(self.n_actions)
         print(f"Number actions: {self.n_actions}")
         seed = None
@@ -80,26 +74,17 @@ class Agent:
         # Get the number of state observations
         self.state, self.info = env.reset()
         print(f"State shape: {self.state.shape}")
-        # self.n_observations = len(self.state)
         self.n_observations = self.state.shape
-        checkpoint = torch.load(f"rl_chk/double-dqn-checkpoint_4mil.pth")
+        checkpoint = torch.load(f"rl_chk/atlantis-ddqn-noper-checkpoint1042.pth")
         self.policy_net = DQNCNN(self.n_observations, self.n_actions, hidden_units=512).to(device)
         self.policy_net.load_state_dict(checkpoint['q-network-state'])
 
         print(self.n_observations)
         print(env.observation_space.shape)
-        # self.policy_net = DQN(env.observation_space.shape, self.n_actions).to(device)
-        # self.target_net = DQN(env.observation_space.shape, self.n_actions).to(device)
+
 
         self.video = []
-    # def discrete2cont_action(self, action):
-    #     # Map the discrete action index to continuous torques
-    #     num_bins = 61
-    #     action_indices = np.unravel_index(action, (num_bins, num_bins, num_bins))
-    #     torque_min = -1.0
-    #     torque_max = 1.0
-    #     torques = [torque_min + (torque_max - torque_min) * idx / (num_bins - 1) for idx in action_indices]
-    #     return np.array(torques)
+
 
     def choose_action(self, state):
         # need to reshape state array and convert to tensor
@@ -114,13 +99,9 @@ class Agent:
 
     def uniform_random_policy(self, state):
         """Choose an action uniformly at random."""
-        # random_vector = np.random.(low=-1, high=1, size=self.n_actions)
-        # return random_vector
         return self.random_state.randint(self.n_actions)
 
     def greedy_policy(self, state):
-        # print(state.shape)
-        # print(state.dtype)
         """Choose an action that maximizes the action_values given the current state."""
         action = (self.policy_net(state)
                   .argmax()
@@ -130,7 +111,6 @@ class Agent:
 
     def select_greedy_actions(self, states, q_network):
         _, actions = q_network(states).max(dim=1, keepdim=True)
-        # print(actions)
         return actions
 
     def step(self, state, action, reward, next_state, done):
@@ -147,7 +127,6 @@ class Agent:
         self.policy_net.eval()
         with torch.no_grad():
             for t in range(self.max_timesteps):
-        #     while not done:
 
                 action = self.choose_action(state)
                 next_state, reward, done, truncated, info = self.env.step(action)
@@ -176,7 +155,6 @@ class Agent:
 
     def train(self):
         scores = []
-        target_score = float("inf")
         most_recent_scores = deque(maxlen=100)
         score = self.train_for_at_most()
         scores.append(score)
@@ -194,12 +172,10 @@ def Preprocessing_env(env):
     return env
 
 if "main":
-    # env = gym.make('CartPole-v1', render_mode="rgb_array")
-    # env = gym.make('Hopper-v4', render_mode="rgb_array")
-    env = gym.make("BreakoutNoFrameskip-v4", render_mode="rgb_array")
+    env = gym.make("AtlantisNoFrameskip-v4", render_mode="rgb_array")
     env = Preprocessing_env(env)
-    dqn = Agent(env, per=False, double=True)
+    dqn = Agent(env, per=False, double=True) # Change for the different experiments.
     scores = dqn.train()
-    # plt.plot(scores)
-    # plt.savefig("rewards.png")
-    # plt.show()
+    plt.plot(scores)
+    plt.savefig("rewards.png")
+    plt.show()
