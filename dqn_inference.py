@@ -82,7 +82,7 @@ class Agent:
         print(f"State shape: {self.state.shape}")
         # self.n_observations = len(self.state)
         self.n_observations = self.state.shape
-        checkpoint = torch.load(f"rl_chk/double-dqn-checkpoint_4mil.pth")
+        checkpoint = torch.load(f"rl_chk/dqn-per-checkpoint_4mil.pth")
         self.policy_net = DQNCNN(self.n_observations, self.n_actions, hidden_units=512).to(device)
         self.policy_net.load_state_dict(checkpoint['q-network-state'])
 
