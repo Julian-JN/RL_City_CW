@@ -22,7 +22,7 @@ print(f"Device is {device}")
 Transition = namedtuple('Transition',
                         ('state', 'action', 'reward', 'next_state', 'done'))
 
-os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128"
+# os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128"
 
 
 class DQN(nn.Module):
