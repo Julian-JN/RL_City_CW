@@ -300,11 +300,13 @@ class Agent:
             f.write("Starting prints")
         for i in range(self.max_episodes):
             score = self.train_for_at_most()
-            logger.log({'Score': score})
+            if self.logger:
+                logger.log({'Score': score})
             scores.append(score)
             most_recent_scores.append(score)
             average_score = np.mean(most_recent_scores)
-            logger.log({'Mean Score 100 Episodes': average_score})
+            if self.logger:
+                logger.log({'Mean Score 100 Episodes': average_score})
 
             if average_score >= target_score or self.number_timesteps >= 4000000: # 3 million episode limit
                 print(f"\nEnvironment solved in {i:d} episodes!\tAverage Score: {average_score:.2f}")
@@ -346,12 +348,12 @@ if "main":
     # env = gym.make('Hopper-v4')
     env = Preprocessing_env(env)
 
-    wandb_logger = Logger(
-        f"PER-DQN-New",
-        project='INM707-Task2')
-    logger = wandb_logger.get_logger()
+    # wandb_logger = Logger(
+    #     f"PER-DQN-New",
+    #     project='INM707-Task2')
+    # logger = wandb_logger.get_logger()
 
-    dqn = Agent(env, per=True, double=False, logger = logger)
+    dqn = Agent(env, per=True, double=False, logger = True)
     scores = dqn.train()
     plt.plot(scores)
     plt.savefig("rewards.png")
