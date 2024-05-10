@@ -61,13 +61,13 @@ class DQNCNN(nn.Module): # DQN/DDQN
 class Agent:
     def __init__(self, env, per=False, double=False, logger=None):
         self.logger = logger
-        self.max_timesteps = 5000
+        self.max_timesteps = 20000
         self.number_timesteps = 0
         self.number_episodes = 0
         self.epsilon = 1
         # Get number of actions from gym action space
         self.env = env
-        self.n_actions = 4
+        self.n_actions = 18
         self.number_lives = 5
         # self.n_actions = env.action_space.shape[0]
         # num_bins = 61  # Number of bins for each action dimension
@@ -82,7 +82,7 @@ class Agent:
         print(f"State shape: {self.state.shape}")
         # self.n_observations = len(self.state)
         self.n_observations = self.state.shape
-        checkpoint = torch.load(f"rl_chk/double-dqn-checkpoint_4mil.pth")
+        checkpoint = torch.load(f"rl_chk/indiv-GAMMA-ddqn-per-checkpoint_4mil.pth")
         self.policy_net = DQNCNN(self.n_observations, self.n_actions, hidden_units=512).to(device)
         self.policy_net.load_state_dict(checkpoint['q-network-state'])
 
@@ -162,7 +162,7 @@ class Agent:
                 score += reward
                 if done or truncated:
                     print("GAME OVER!")
-                    save_video(self.video, "videos", fps=25, name_prefix="video-inference")
+                    save_video(self.video, "videos", fps=25, name_prefix="indiv-video-inference")
                     self.number_episodes += 1
                     self.video = []
                     break
@@ -196,7 +196,7 @@ def Preprocessing_env(env):
 if "main":
     # env = gym.make('CartPole-v1', render_mode="rgb_array")
     # env = gym.make('Hopper-v4', render_mode="rgb_array")
-    env = gym.make("BreakoutNoFrameskip-v4", render_mode="rgb_array")
+    env = gym.make("BattleZoneNoFrameskip-v4", render_mode="rgb_array")
     env = Preprocessing_env(env)
     dqn = Agent(env, per=False, double=True)
     scores = dqn.train()

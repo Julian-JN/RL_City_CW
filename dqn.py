@@ -71,11 +71,13 @@ class Agent:
     def __init__(self, env, per=False, double = False, logger = None):
 
         self.logger = logger
-        self.GAMMA = 0.99
-        self.LR = 1e-4
+        self.GAMMA = 0.99 # 0.99 for breakout
+        print("GAMMA VALUE IS: ")
+        print(self.GAMMA)
+        self.LR = 1e-4 # 1e-4 for breakout
         self.ALPHA = 1
         self.update_frequency = 4
-        self.update_target_frequency = 10000 # 20k for tuned ddqn
+        self.update_target_frequency = 20000 # 20k for tuned ddqn
         self.batch_size = 64
         self.per = per
         self.double_dqn = double
@@ -95,7 +97,7 @@ class Agent:
 
         # Get number of actions from gym action space
         self.env = env
-        self.n_actions = 4
+        self.n_actions = 18 # 4 for breakout
         self.number_lives = 5
         # self.n_actions = env.action_space.shape[0]
         # num_bins = 61  # Number of bins for each action dimension
@@ -223,7 +225,9 @@ class Agent:
         else:
             target_q_values = self.q_learning_update(next_states,rewards,dones,self.GAMMA,self.target_net)
         online_q_values = (self.policy_net(states).gather(dim=1, index=actions))
-        losses = F.mse_loss(online_q_values, target_q_values, reduction='none')
+        # losses = F.mse_loss(online_q_values, target_q_values, reduction='none')
+        criterion = nn.HuberLoss(reduction='none') # Indiv test
+        losses = criterion(online_q_values, target_q_values)
         td_errors = torch.sqrt(losses)  # used for PER
         is_weights_tensor = torch.tensor(np.array(is_weights), dtype=torch.float32, device=device)
         weighted_losses = losses * is_weights_tensor  # Apply IS weights
@@ -274,7 +278,7 @@ class Agent:
 
             else:
                 self.step(state, action, reward, next_state, done)
-            self.epsilon = np.interp(self.number_timesteps, [0, 500000], [1, 0.01])
+            self.epsilon = np.interp(self.number_timesteps, [0, 500000], [1, 0.01]) # 500000 for breakout
             episode_timestep +=1
             state = next_state
             score += reward
@@ -306,9 +310,9 @@ class Agent:
             average_score = np.mean(most_recent_scores)
             logger.log({'Mean Score 100 Episodes': average_score})
 
-            if average_score >= target_score or self.number_timesteps >= 4000000: # 3 million episode limit
+            if average_score >= target_score or self.number_timesteps >= 4000000: # 4 million episode limit for breakout
                 print(f"\nEnvironment solved in {i:d} episodes!\tAverage Score: {average_score:.2f}")
-                checkpoint_filepath = f"rl_chk/new-dqn-per-checkpoint{self.number_episodes}.pth"
+                checkpoint_filepath = f"rl_chk/indiv-HUBER-ddqn-per-checkpoint{self.number_episodes}.pth"
                 os.makedirs(os.path.dirname(checkpoint_filepath), exist_ok=True)
                 self.save(checkpoint_filepath)
                 break
@@ -319,7 +323,7 @@ class Agent:
                 with open('prints.txt', 'a') as f:
                     f.write("\nSaving checkpoint")
                 print("Saving checkpoint")
-                checkpoint_filepath = f"rl_chk/new-dqn-per-checkpoint_4mil.pth"
+                checkpoint_filepath = f"rl_chk/indiv-HUBER-ddqn-per-checkpoint_4mil.pth"
                 self.save(checkpoint_filepath)
             if (i + 1) % 100 == 0:
                 plt.plot(scores)
@@ -342,16 +346,16 @@ def Preprocessing_env(env):
 
 if "main":
     # env = gym.make('CartPole-v1', render_mode="rgb_array")
-    env = gym.make("BreakoutNoFrameskip-v4", render_mode="rgb_array")
+    env = gym.make("BattleZoneNoFrameskip-v4", render_mode="rgb_array")
     # env = gym.make('Hopper-v4')
     env = Preprocessing_env(env)
 
     wandb_logger = Logger(
-        f"PER-DQN-New",
+        f"PER-DDQN-Individual_HUBER",
         project='INM707-Task2')
     logger = wandb_logger.get_logger()
 
-    dqn = Agent(env, per=True, double=False, logger = logger)
+    dqn = Agent(env, per=True, double=True, logger = logger)
     scores = dqn.train()
     plt.plot(scores)
     plt.savefig("rewards.png")
