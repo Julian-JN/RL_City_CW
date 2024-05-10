@@ -283,7 +283,7 @@ class Agent:
             state = next_state
             score += reward
             if done or truncated:
-                print(f"Episode: {self.number_episodes} Timesteps {episode_timestep}  Died :(")
+                print(f"Episode: {self.number_episodes} Timesteps {episode_timestep}")
                 self.number_episodes += 1
                 self.video = []
                 break
@@ -304,11 +304,13 @@ class Agent:
             f.write("Starting prints")
         for i in range(self.max_episodes):
             score = self.train_for_at_most()
-            logger.log({'Score': score})
+            if self.logger:
+                logger.log({'Score': score})
             scores.append(score)
             most_recent_scores.append(score)
             average_score = np.mean(most_recent_scores)
-            logger.log({'Mean Score 100 Episodes': average_score})
+            if self.logger:
+                logger.log({'Mean Score 100 Episodes': average_score})
 
             if average_score >= target_score or self.number_timesteps >= 4000000: # 4 million episode limit for breakout
                 print(f"\nEnvironment solved in {i:d} episodes!\tAverage Score: {average_score:.2f}")
@@ -350,12 +352,13 @@ if "main":
     # env = gym.make('Hopper-v4')
     env = Preprocessing_env(env)
 
-    wandb_logger = Logger(
-        f"PER-DDQN-Individual_HUBER",
-        project='INM707-Task2')
-    logger = wandb_logger.get_logger()
+    # wandb_logger = Logger(
+    #     f"PER-DDQN-Individual_HUBER",
+    #     project='INM707-Task2')
+    # logger = wandb_logger.get_logger()
 
-    dqn = Agent(env, per=True, double=True, logger = logger)
+    # If you want to use wandb
+    dqn = Agent(env, per=True, double=True, logger = False)
     scores = dqn.train()
     plt.plot(scores)
     plt.savefig("rewards.png")
