@@ -22,7 +22,7 @@ print(f"Device is {device}")
 Transition = namedtuple('Transition',
                         ('state', 'action', 'reward', 'next_state', 'done'))
 
-os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128"
+# os.environ['https_proxy'] = "http://hpc-proxy00.city.ac.uk:3128"
 
 
 class DQN(nn.Module):
@@ -341,13 +341,11 @@ def Preprocessing_env(env):
     return env
 
 if "main":
-    # env = gym.make('CartPole-v1', render_mode="rgb_array")
-    env = gym.make("BreakoutNoFrameskip-v4", render_mode="rgb_array")
-    # env = gym.make('Hopper-v4')
+    env = gym.make("AtlantisNoFrameskip-v4", render_mode="rgb_array")
     env = Preprocessing_env(env)
 
     wandb_logger = Logger(
-        f"PER-DQN-New",
+        f"logger-DQN-Atlantis",
         project='INM707-Task2')
     logger = wandb_logger.get_logger()
 
